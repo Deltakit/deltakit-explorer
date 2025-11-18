@@ -97,7 +97,7 @@ class TestCalculateLambda:
         lepprs_stddev = (1 + relative_stddevs) * lepprs
         res1 = calculate_lambda_and_lambda_stddev(distances, lepprs, lepprs_stddev, m1)
         res2 = calculate_lambda_and_lambda_stddev(distances, lepprs, lepprs_stddev, m2)
-        # Estimations of lambda and lambda0 are already checked by another test, so we
-        # only check that the standard deviations actually agree here.
+        # Estimations of lambda and lambda0 are already checked by another test, so we
+        # only check that the standard deviations actually agree here.
         assert pytest.approx(res1.lambda_stddev, rel=1e-6) == res2.lambda_stddev
         assert pytest.approx(res1.lambda0_stddev, rel=1e-6) == res2.lambda0_stddev
