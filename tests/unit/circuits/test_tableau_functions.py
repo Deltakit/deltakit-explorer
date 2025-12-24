@@ -7,6 +7,8 @@ from operator import add, mul
 import numpy as np
 import pytest
 import stim
+from packaging.version import Version
+from importlib.metadata import version
 from deltakit_circuit import (Circuit, Detector, GateLayer, MeasurementRecord,
                               NoiseLayer, Observable, PauliX, Qubit,
                               ShiftCoordinates)
@@ -42,6 +44,11 @@ from deltakit_explorer.qpu._circuits._tableau_functions import (
     _get_compilation_with_projectors_before_unitaries,
     _get_compilation_with_two_qubit_gates, _is_identity_like)
 from deltakit_explorer.qpu._native_gate_set import NativeGateSet
+
+
+CURRENT_STIM_VERSION = Version(version("stim"))
+STIM_VERSION_V1_13_0 = Version("1.13.0")
+
 
 # define set of compilation dictionaries for testing
 compilation_dict0 = {("+X", "+Z"): ()}
@@ -8958,6 +8965,14 @@ class TestTwoQubitGateCompilationDicts:
         )
         assert stim.Tableau.from_named_gate("CZ") == cz_with_unitaries_tableau
 
+    @pytest.mark.skipif(
+        CURRENT_STIM_VERSION < STIM_VERSION_V1_13_0,
+        reason=(
+            "CZSWAP gate has been introduced in Stim v1.13.0."
+            "See https://github.com/quantumlib/Stim/releases/tag/v1.13.0."
+            f"Current Stim version is {CURRENT_STIM_VERSION}."
+        )
+    )
     @pytest.mark.parametrize("gate", list(GATE_TO_CZSWAP_DICT.keys()))
     def test_cpswap_to_czswap_dict_compilations_give_equivalent_tableaus(self, gate):
         ub1, ub2, ub3, ub4 = GATE_TO_CZSWAP_DICT[gate]
@@ -8991,6 +9006,14 @@ class TestTwoQubitGateCompilationDicts:
             == czswap_with_unitaries_tableau
         )
 
+    @pytest.mark.skipif(
+        CURRENT_STIM_VERSION < STIM_VERSION_V1_13_0,
+        reason=(
+            "CZSWAP gate has been introduced in Stim v1.13.0."
+            "See https://github.com/quantumlib/Stim/releases/tag/v1.13.0."
+            f"Current Stim version is {CURRENT_STIM_VERSION}."
+        )
+    )
     @pytest.mark.parametrize("gate", list(CZSWAP_TO_GATE_DICT.keys()))
     def test_czswap_to_cpswap_dict_compilations_give_equivalent_tableaus(self, gate):
         ub1, ub2, ub3, ub4 = CZSWAP_TO_GATE_DICT[gate]
