@@ -2,9 +2,9 @@
 """Description of ``deltakit.explorer.visualisation`` namespace here."""
 
 from deltakit_explorer.plotting._correlation_matrix import (
-                                                            correlation_matrix,
-                                                            defect_diagram,
-                                                            defect_rates,
+    correlation_matrix,
+    defect_diagram,
+    defect_rates,
 )
 from deltakit_explorer.plotting._lambda import plot_lambda
 from deltakit_explorer.plotting._leppr import plot_logical_error_probability_per_round
