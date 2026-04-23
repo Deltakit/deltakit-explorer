@@ -8,9 +8,7 @@ from deltakit_core.plotting.colours import RIVERLANE_PLOT_COLOURS
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from deltakit_explorer.plotting.results import (
-    LambdaResult,
-)
+from deltakit_explorer.plotting.results import LambdaResult
 from deltakit_explorer.plotting.results import (
     LogicalErrorProbabilityPerRoundResult as LEPPRResult,
 )
@@ -29,15 +27,10 @@ def plot(
     This function inspects the type of ``result`` and calls the appropriate
     rendering logic:
 
-    - :class:`~deltakit_explorer.plotting.results.LambdaResult` -- renders the
-      error-suppression factor Λ fit curve with error bands.
-    - :class:`~deltakit_explorer.plotting.results.LEPPRResult` -- renders the
-      logical error probability per round fit curve with error bands.
+    - `LambdaResult`: Render error-suppression factor Λ fit curve with error bands.
+    - `LEPPRResult`: Renders the logical error probability per round fit curve with error bands.
 
-    This enables users to compute the plot data separately (via
-    :meth:`~deltakit_explorer.plotting.results.interpolate_lambda` or
-    :meth:`~deltakit_explorer.plotting.results.interpolate_leppr`) and then
-    render with a single call.
+    This enables users to compute the plot data separately (via `interpolate_lambda` or `interpolate_leppr`) and then render with a single call.
 
     Args:
         result: The precomputed plot data.
@@ -56,6 +49,7 @@ def plot(
         TypeError: If the ``result`` type is not supported.
 
     Examples:
+
         Plotting a Lambda fit curve::
 
             from deltakit_explorer.plotting.results import interpolate_lambda
@@ -69,6 +63,7 @@ def plot(
 
             leppr_result = interpolate_leppr(leppr_data, num_rounds)
             fig, ax = plot(leppr_result)
+
     """
     if (fig is None) ^ (ax is None):
         msg = "The 'fig' and 'ax' parameters should either be both `None` or both set."
@@ -89,12 +84,12 @@ def plot(
         case LEPPRResult():
             x_vals = result.rounds
             xlabel = "Rounds"
-            ylabel = "Logical Error Probability per Round"
+            ylabel = "Logical Error Probability"
             default_title = "Logical Error Probability per Round"
         case _:
             msg = (
                 f"Unsupported result type: {type(result).__name__}. "
-                "Expected LambdaResult or LEPPRResult."
+                "Expected `LambdaResult` or `LEPPRResult`."
             )
             raise TypeError(msg)
 

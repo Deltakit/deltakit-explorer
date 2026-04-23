@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from enum import Enum
 
 import numpy as np
 import numpy.typing as npt
@@ -12,140 +12,257 @@ import scipy.optimize
 
 @dataclass(frozen=True)
 class LambdaData:
-    """Named-tuple-like class containing computation results from
-    :func:`calculate_lambda_and_lambda_stddev`.
+    """Container for error suppression parameters and associated data.
+
+    This dataclass stores the fitted error suppression factor (Λ) and
+    prefactor (Λ₀), along with their standard deviations and the underlying
+    data used for the fit.
+
+    The error model assumes an exponential decay of base 1/Λ wrt the code distance
+    for the logical error probability per round (leppr) ε_d:
+
+        ε_d ≈ 1 / (Λ₀ · Λ^((d+1)/2))
+
+    where:
+        - Λ (lambda) is the error suppression factor
+        - Λ₀ (lambda_0) is a multiplicative offset
+        - d is the code distance
 
     Attributes:
-        lambda_ (float): computed error suppression factor.
-        lambda_stddev (float): lambda standard deviation.
-        lambda0 (float): computed error suppression multiplicative offset (value of Λ_0
-            in the expression ``Ɛ_d = 1 / [ Λ_0 * Λ**((d+1)/2) ]``).
-        lambda0_stddev (float): Λ_0 standard deviation.
+        lambda_: Error suppression factor. The underscore avoids shadowing Python keyword ``lambda``.
+        lambda_std: Error suppression factor standard deviation.
+        lambda0: Error suppression prefactor.
+        lambda0_std: Error suppression prefactor standard deviation.
+        distances: An array of code distances.
+        leppr: An array for leppr computed for all code distances.
+        leppr_std: An array for leppr standard deviation computed for all code distances.
+
+    Note:
+        This class maintains the invariant that the lengths for 'distances', 'leppr' and 'leppr_std'
+        match.
     """
 
-    lambda_: float  # lambda_ avoids shadowing the built-in `lambda` keyword
-    lambda_stddev: float
+    lambda_: float
+    lambda_std: float
     lambda0: float
-    lambda0_stddev: float
+    lambda0_std: float
+    distances: npt.NDArray[np.int_]
+    leppr: npt.NDArray[np.float64]
+    leppr_std: npt.NDArray[np.float64]
+
+    def __post_init__(self) -> None:
+        if not (len(self.distances) == len(self.leppr) == len(self.leppr_std)):
+            msg = "Mismatch in array lengths for 'distances', 'leppr' and 'leppr_std'."
+            raise ValueError(msg)
 
 
-_LambdaFittingCallable = Callable[
+_LambdaFitCallable = Callable[
     [
-        npt.NDArray[np.int_] | Sequence[int],
-        npt.NDArray[np.float64] | Sequence[float],
-        npt.NDArray[np.float64] | Sequence[float],
+        npt.NDArray[np.int_],
+        npt.NDArray[np.float64],
+        npt.NDArray[np.float64],
     ],
     LambdaData,
 ]
 
 
-def _lambda_fit_with_d(
-    distances: npt.NDArray[np.int_] | Sequence[int],
-    lep_per_round: npt.NDArray[np.float64] | Sequence[float],
-    lep_stddev_per_round: npt.NDArray[np.float64] | Sequence[float],
-) -> LambdaData:
-    """Compute Λ, Λ_0 and their associated standard deviations by fitting the logarithm
-    of ``lep_per_round`` with ``distance``.
-    """
-    # Prepare data for the fit.
-    lep_per_round = np.asarray(lep_per_round, dtype=np.float64)
-    logleppr = np.log(lep_per_round)
-    logleppr_stddev = lep_stddev_per_round / lep_per_round
-    # Fitting with numpy.polyfit to be able to provide standard deviations and recover a
-    # covariance matrix as numpy.polynomial.Polyfit is not able to do that yet.
-    (slope, offset), cov = np.polyfit(
-        distances, logleppr, 1, w=1 / logleppr_stddev, full=False, cov="unscaled"
-    )
-    slope_stddev, offset_stddev = np.sqrt(np.diagonal(cov))
-    # Recovering the numbers of interest. Maths representing what has been performed:
-    # We start from Ɛ_d = 1 / [ Λ_0 * Λ**((d+1)/2) ]
-    # Applying ln:  ln(Ɛ_d) = - ln(Λ_0) - (d+1)/2 * ln(Λ)
-    #                       = - ln(Λ_0) - ln(Λ)/2 - d * ln(Λ)/2
-    # The linear fit performed above gave us slope  = -ln(Λ)/2
-    #                                        offset = -ln(Λ_0) - ln(Λ)/2
-    lambda_value = float(np.exp(-2 * slope))
-    lambda_value_stddev = float(lambda_value * 2 * slope_stddev)
-    lambda0 = float(np.exp(-offset - np.log(lambda_value) / 2))
-    # Λ_0 = exp(-offset - ln(Λ)/2)
-    # Error analysis (to compute the standard deviation of Λ_0) done with the formulas
-    # in https://en.wikipedia.org/wiki/Propagation_of_uncertainty#Example_formulae:
-    # σ(ln(Λ)/2) = σ(Λ) / (2 * Λ)
-    # σ(offset) is obtained from the covariance matrix
-    # σ(-offset - ln(Λ)/2) = √(σ(offset)² + σ(ln(Λ) / 2)²
-    #                          - 2 * covariance(offset, ln(Λ) / 2))
-    #                      = √(σ(offset)² + σ(Λ)² / (4 * Λ²)
-    #                          - 2 * covariance(offset, ln(Λ) / 2))
-    # σ(exp(-offset - ln(Λ)/2)) = exp(-offset - ln(Λ)/2) * σ(-offset - ln(Λ)/2)
-    #                           = Λ_0 * √(σ(offset)² + σ(Λ)² / (4 * Λ²)
-    #                                     - 2 * covariance(offset, ln(Λ) / 2))
-    lambda0_stddev = float(
-        lambda0
-        * np.sqrt(
-            offset_stddev**2
-            + lambda_value_stddev**2 / (4 * lambda_value**2)
-            - 2 * cov[0, 1]
-        )
-    )
-    return LambdaData(lambda_value, lambda_value_stddev, lambda0, lambda0_stddev)
+class LambdaFitMethod(Enum):
+    SHIFTED = "shifted"
+    """Linear fit with 'd' over logarithmic values."""
+    LIN = "lin"
+    """Linear fit with '(d+1)/2' over logarithmic values."""
+    CURVE = "curve"
+    """Non-linear fit."""
 
 
-def _lambda_fit_with_d_plus_1_over_2(
-    distances: npt.NDArray[np.int_] | Sequence[int],
-    lep_per_round: npt.NDArray[np.float64] | Sequence[float],
-    lep_stddev_per_round: npt.NDArray[np.float64] | Sequence[float],
+def _lambda_shifted_fit(
+    distances: npt.NDArray[np.int_],
+    leppr: npt.NDArray[np.float64],
+    leppr_std: npt.NDArray[np.float64],
 ) -> LambdaData:
-    """Compute Λ, Λ_0 and their associated standard deviations by fitting the logarithm
-    of ``lep_per_round`` with ``(distance + 1) / 2``.
+    """Estimate error suppression factors Λ and Λ₀ via linear fit and shifted distances.
+
+    From the logical error probability per round (leppr) ε_d relationship
+    with error suppression factors and code distance:
+
+        ε_d ≈ 1 / (Λ₀ · Λ^((d+1)/2))
+
+    This function fits a linear model to the logarithm of the leppr
+    as a function of the distance:
+
+        ln(ε_d) = -ln(Λ₀) - (d+1)/2 · ln(Λ)
+
+    A linear fit of ln(ε_d) versus shifted distance d gives:
+
+        slope  = -ln(Λ) / 2
+        offset = -ln(Λ₀) - ln(Λ) / 2
+
+    Recovering the original parameters:
+
+         Λ  = exp(-2 · slope)
+         Λ₀ = exp(-offset - ln(Λ)/2)
+
+    Standard deviations for both fitted parameters are also computed using
+    standard formulae found in:
+    https://en.wikipedia.org/wiki/Propagation_of_uncertainty#Example_formulae
+
+        (ln(Λ)/2) = Δ(Λ) / (2 · Λ)
+
+        Δ(-offset - ln(Λ)/2)
+            = sqrt( Δ(offset)² + Δ(Λ)² / (4 · Λ²)
+                    - 2 · cov(offset, ln(Λ)/2) )
+
+        Δ(Λ₀)
+            = Λ₀ · sqrt( Δ(offset)² + Δ(Λ)² / (4 · Λ²)
+                         - 2 · cov(offset, ln(Λ)/2) )
+
+    Args:
+        distances: Code distances.
+        leppr: Logical error probability per round.
+        leppr_std: Logical error probability per round standard deviation.
+
+    Returns:
+        LambdaData: A container for error suppression parameters.
     """
-    # Prepare data for the fit.
-    distances = np.asarray(distances, dtype=np.int_)
-    lep_per_round = np.asarray(lep_per_round, dtype=np.float64)
-    logleppr = np.log(lep_per_round)
-    logleppr_stddev = lep_stddev_per_round / lep_per_round
-    # Fitting with numpy.polyfit to be able to provide standard deviations and recover a
-    # covariance matrix as numpy.polynomial.Polyfit is not able to do that yet.
+    # Prepare log data for linear fit.
+    log_leppr = np.log(leppr)
+    log_leppr_std = leppr_std / leppr
+    # Fitting with the old 'numpy.polyfit' API provides standard deviations and a covariance matrix over the
+    # new 'numpy.polynomial.Polyfit' API. See for instance the transition guide:
+    # https://numpy.org/doc/stable/reference/routines.polynomials.html
     (slope, offset), cov = np.polyfit(
-        (distances + 1) / 2,
-        logleppr,
+        distances,
+        log_leppr,
         1,
-        w=1 / logleppr_stddev,
+        w=1 / log_leppr_std,
         full=False,
         cov="unscaled",
     )
-    slope_stddev, offset_stddev = np.sqrt(np.diagonal(cov))
-    # Recovering the numbers of interest. Maths representing what has been performed:
-    # We start from Ɛ_d = 1 / [ Λ_0 * Λ**((d+1)/2) ]
-    # Applying ln:  ln(Ɛ_d) = - ln(Λ_0) - (d+1)/2 * ln(Λ)
-    # The linear fit performed above gave us slope  = -ln(Λ)
-    #                                        offset = -ln(Λ_0)
-    lambda_value = float(np.exp(-slope))
-    lambda_value_stddev = float(lambda_value * slope_stddev)
-    lambda0 = float(np.exp(-offset))
-    lambda0_stddev = float(lambda0 * offset_stddev)
-    return LambdaData(lambda_value, lambda_value_stddev, lambda0, lambda0_stddev)
+    slope_std, offset_std = np.sqrt(np.diagonal(cov))
+    # Estimate error suppression factors.
+    estimated_lambda = float(np.exp(-2 * slope))
+    estimated_lambda_std = float(estimated_lambda * 2 * slope_std)
+    estimated_lambda0 = float(np.exp(-offset - np.log(estimated_lambda) / 2))
+    # Uncertainty propagation.
+    estimated_lambda0_std = float(
+        estimated_lambda0
+        * np.sqrt(
+            offset_std**2
+            + estimated_lambda_std**2 / (4 * estimated_lambda**2)
+            - 2 * cov[0, 1]
+        )
+    )
+    return LambdaData(
+        lambda_=estimated_lambda,
+        lambda_std=estimated_lambda_std,
+        lambda0=estimated_lambda0,
+        lambda0_std=estimated_lambda0_std,
+        distances=distances,
+        leppr=leppr,
+        leppr_std=leppr_std,
+    )
 
 
-def _lambda_fit_with_direct(
-    distances: npt.NDArray[np.int_] | Sequence[int],
-    lep_per_round: npt.NDArray[np.float64] | Sequence[float],
-    lep_stddev_per_round: npt.NDArray[np.float64] | Sequence[float],
+def _lambda_lin_fit(
+    distances: npt.NDArray[np.int_],
+    leppr: npt.NDArray[np.float64],
+    leppr_std: npt.NDArray[np.float64],
 ) -> LambdaData:
-    """Compute Λ, Λ_0 and their associated standard deviations by fitting
-    ``lep_per_round`` to ``1 / Λ_0 * Λ**(-(distance + 1) / 2)`` directly.
+    """Estimate error suppression factors Λ and Λ₀ via linear fit.
 
-    This method does not rely on least-square polynomial fitting but rather on a more
-    generic method. As such, it requires more time to converge.
+    From the logical error probability per round (leppr) ε_d relationship
+    with error suppression factors and code distance:
+
+        ε_d ≈ 1 / (Λ₀ · Λ^((d+1)/2))
+
+    This function fits a linear model to the logarithm of the leppr
+    as a function of the distance:
+
+        ln(ε_d) = -ln(Λ₀) - (d+1)/2 · ln(Λ)
+
+    A linear fit of ln(ε_d) versus distance (d+1)/2 gives:
+
+        slope  = -ln(Λ)
+        offset = -ln(Λ₀)
+
+    Recovering the original parameters:
+
+         Λ  = exp(-slope)
+         Λ₀ = exp(-offset)
+
+    Standard deviations for both fitted parameters are also computed using
+    standard formulae found in:
+    https://en.wikipedia.org/wiki/Propagation_of_uncertainty#Example_formulae
+
+        Δ(Λ)  = Λ · Δ(slope)
+        Δ(Λ₀) = Λ₀ · Δ(offset)
+
+    Args:
+        distances: Code distances.
+        leppr: Logical error probability per round.
+        leppr_std: Logical error probability per round standard deviation.
+
+    Returns:
+        LambdaData: A container for error suppression parameters.
     """
-    # Prepare data for the fit.
-    distances = np.asarray(distances, dtype=np.int_)
-    # Here we are not fitting a polynomial anymore but directly the formula:
-    #   Ɛ_d = 1 / [ Λ_0 * Λ**((d+1)/2) ]
-    # with ``x`` that is ``(d+1)/2``.
+    # Prepare log data for linear fit.
+    log_leppr = np.log(leppr)
+    log_leppr_std = leppr_std / leppr
+    # Fitting with the old 'numpy.polyfit' API provides standard deviations and a covariance matrix over the
+    # new 'numpy.polynomial.Polyfit' API. See for instance the transition guide:
+    # https://numpy.org/doc/stable/reference/routines.polynomials.html
+    (slope, offset), cov = np.polyfit(
+        (distances + 1) / 2,
+        log_leppr,
+        1,
+        w=1 / log_leppr_std,
+        full=False,
+        cov="unscaled",
+    )
+    slope_std, offset_std = np.sqrt(np.diagonal(cov))
+    # Estimate error suppression factors.
+    estimated_lambda = float(np.exp(-slope))
+    estimated_lambda_std = float(estimated_lambda * slope_std)
+    estimated_lambda0 = float(np.exp(-offset))
+    estimated_lambda0_std = float(estimated_lambda0 * offset_std)
+    return LambdaData(
+        lambda_=estimated_lambda,
+        lambda_std=estimated_lambda_std,
+        lambda0=estimated_lambda0,
+        lambda0_std=estimated_lambda0_std,
+        distances=distances,
+        leppr=leppr,
+        leppr_std=leppr_std,
+    )
+
+
+def _lambda_curve_fit(
+    distances: npt.NDArray[np.int_],
+    leppr: npt.NDArray[np.float64],
+    leppr_std: npt.NDArray[np.float64],
+) -> LambdaData:
+    """Estimate error suppression factors Λ and Λ₀ with curve fit.
+
+    From the logical error probability per round (leppr) ε_d relationship
+    with the error suppression factor and code distance:
+
+        ε_d ≈ 1 / (Λ₀ · Λ^((d+1)/2))
+
+    This function fits a curve model to the leppr as a function of the distance.
+
+    Args:
+        distances: Code distances.
+        leppr: Logical error probability per round.
+        leppr_std: Logical error probability per round standard deviation.
+
+    Returns:
+        LambdaData: A container for error suppression parameters.
+    """
     (lamb0, lamb), cov = scipy.optimize.curve_fit(
         lambda x, lamb0, lamb: 1 / lamb0 * lamb ** (-x),
         (distances + 1) / 2,
-        lep_per_round,
-        sigma=lep_stddev_per_round,
+        leppr,
+        sigma=leppr_std,
         absolute_sigma=True,
         jac=lambda x, lamb0, lamb: np.transpose(
             [
@@ -153,101 +270,101 @@ def _lambda_fit_with_direct(
                 -1 / lamb0 * x * lamb ** (-x - 1),
             ]
         ),
-        # Both parameters below are needed for crazy values of lambda and lambda0 to
-        # make sure the method converges to the correct value.
-        bounds=(0, np.inf),
+        bounds=(0, np.inf),  # Ensure convergence in pathological cases.
         maxfev=10000,
     )
-    lamb0_stddev, lamb_stddev = np.sqrt(np.diagonal(cov))
+    lamb0_std, lamb_std = np.sqrt(np.diagonal(cov))
     return LambdaData(
-        float(lamb), float(lamb_stddev), float(lamb0), float(lamb0_stddev)
+        lambda_=float(lamb),
+        lambda_std=float(lamb_std),
+        lambda0=float(lamb0),
+        lambda0_std=float(lamb0_std),
+        distances=distances,
+        leppr=leppr,
+        leppr_std=leppr_std,
     )
 
 
-_LAMBDA_FITTING_METHODS: dict[
-    Literal["d", "(d+1)/2", "direct"], _LambdaFittingCallable
-] = {
-    "d": _lambda_fit_with_d,
-    "(d+1)/2": _lambda_fit_with_d_plus_1_over_2,
-    "direct": _lambda_fit_with_direct,
+_LAMBDA_FIT_METHODS: dict[LambdaFitMethod, _LambdaFitCallable] = {
+    LambdaFitMethod.SHIFTED: _lambda_shifted_fit,
+    LambdaFitMethod.LIN: _lambda_lin_fit,
+    LambdaFitMethod.CURVE: _lambda_curve_fit,
 }
 
 
 def calculate_lambda_and_lambda_stddev(
     distances: npt.NDArray[np.int_] | Sequence[int],
-    lep_per_round: npt.NDArray[np.float64] | Sequence[float],
-    lep_stddev_per_round: npt.NDArray[np.float64] | Sequence[float],
-    method: Literal["d", "(d+1)/2", "direct"] = "(d+1)/2",
+    leppr: npt.NDArray[np.float64] | Sequence[float],
+    leppr_std: npt.NDArray[np.float64] | Sequence[float],
+    method: LambdaFitMethod = LambdaFitMethod.LIN,
 ) -> LambdaData:
-    """Calculate the error suppression factor (Λ) and its standard deviation.
+    """Estimate the error suppression factor (Λ) and its standard deviation.
 
-    Requires the logical error probability (LEP) per round (which may be approximated
-    as LEP / num_rounds for small LEP or computed with
-    :func:`compute_logical_error_per_round` for a more precise approximation), and its
-    standard deviation (also returned by :func:`compute_logical_error_per_round`).
+    This function fits the scaling of the logical error probability per round
+    (leppr) and propagates its standard deviation (leppr_std) through the
+    fitting method as a function of code distance.
 
-    By providing the logical error probability for increasing code distances,
-    one can obtain an estimate for how error suppression scales with distances.
-    Note that lambda is a "rule of thumb". This approximation is unreliable near
-    threshold and for low code distances. If such a regime is detected, a warning will
-    be emitted by this function.
+    It extracts the error suppression factor Λ and the prefactor Λ₀,
+    along with their standard deviations.
+
+    The leppr can be approximated as ``lep / num_rounds`` for small error rates,
+    or computed together with its standard deviation more accurately using
+    :func:`compute_logical_error_per_round`.
+
+    By supplying leppr values at increasing code distances, this routine
+    estimates how quickly logical errors are suppressed as the code grows.
+    Note that Λ is a heuristic quantity: estimates may be unreliable near
+    threshold and for small distances. In such cases, a warning is emitted.
+
+    All three fitting methods show remarkable numerical agreement.
+    LambdaFitMethod.CURVE is slower than both LambdaFitMethod.SHIFTED and
+    LambdaFitMethod.LIN, the later two should be preferred in general.
+
+    Reference:
+       Fig. S15 of Supplementary information of
+       "Quantum error correction below the surface code threshold"
+       at https://www.nature.com/articles/s41586-024-08449-y#Sec8
 
     Args:
-        distances (npt.NDArray[numpy.int\\_] | Sequence[int]): Distances at which
-            ``lep_per_round`` and ``lep_stddev_per_round`` are provided. Should only
-            contain odd distances. Estimations of Λ may be unreliable when data from
-            distance 3 is used and the value of Λ is low (see Fig. S15 of Supplementary
-            information of "Quantum error correction below the surface code threshold"
-            at https://www.nature.com/articles/s41586-024-08449-y#Sec8). If such a
-            situation is encountered, a warning will be emitted.
-        lep_per_round (npt.NDArray[numpy.float64] | Sequence[float]):
-            logical error probabilities per round computed for each code distance in
-            ``distances``. Should be the same size as ``distances``.
-        lep_stddev_per_round (npt.NDArray[numpy.float64] | Sequence[float]):
-            standard deviation of the logical error probabilities per round computed for
-            each code distance in ``distances``. Should be the same size as
-            ``distances``.
-        method (Literal["d", "(d+1)/2", "direct"]): mathematical method used to fit the
-            data. Defaults to "(d+1)/2". All 3 methods show remarkable numerical
-            agreement, but "direct" is slower than both "d" and "(d+1)/2", so these last
-            2 should be preferred in general.
+        distances: An array for code distances as leppr data points.
+        leppr: An array for leppr computed for all distances. Must be of same size as 'distances'.
+        leppr_std: An array for leppr standard deviation for each distance. Must be of same size as 'distances'.
+        method: Method used to fit the data. The default is "lin".
 
     Returns:
-        LambdaData: detailed results of the computation.
+        LambdaData: Container for Λ, Λ₀, their standard deviations, and the input data.
 
-    Note:
-        For values of Λ very close to 1 (``abs(Λ - 1) < 1e-7``) and
-        ``method == "direct"``, this function might emit a
-        ``scipy.optimize._optimize.OptimizeWarning`` with the message ``"Covariance of
-        the parameters could not be estimated"``.
+    Raises:
+        ValueError: When input data do not match sizes or when duplicated data is provided.
 
-        Realistically, that condition is not expected to occur in practice due to
-        sampling noise and sampling overhead, but it might be checked by synthetic
-        data (e.g., in unit-tests).
+    Notes:
+        When Λ is very close to 1 (``abs(Λ - 1) < 1e-7``) and ``method == "curve"``,
+        the fit may trigger a ``scipy.optimize.OptimizeWarning`` indicating that
+        the covariance of the parameters could not be estimated. This situation is
+        unlikely with real experimental data but may occur with synthetic inputs.
 
     Examples:
-        Fitting the Λ value given information for 5, 7, and 9 round of a QEC
-        experiment::
-
-            res = calculate_lambda_and_lambda_stddev(
-                distances=[5, 7, 9],
-                lep_per_round=[1.992e-04, 4.314e-05, 7.556e-06],
-                lep_stddev_per_round=[1.2e-05, 9.3e-06, 3.9e-06],
-            )
-            lambda_, lambda_stddev = res.lambda_, res.lambda_stddev
+        >>> res = calculate_lambda_and_lambda_std(
+        ...     distances=[5, 7, 9],
+        ...     leppr=[1.992e-04, 4.314e-05, 7.556e-06],
+        ...     leppr_std=[1.2e-05, 9.3e-06, 3.9e-06],
+        ... )
+        >>> res.lambda_, res.lambda_std
 
     """
-    # Make sure that the inputs are numpy arrays sorted by distance
+    method = LambdaFitMethod(method)
+    if not (len(distances) == len(leppr) == len(leppr_std)):
+        msg = "Input data do not match lengths."
+        raise ValueError(msg)
+    # Sort inputs by increasing distance.
     isort = np.argsort(distances)
     distances = np.asarray(distances)[isort]
-    lep_per_round = np.asarray(lep_per_round)[isort]
-    lep_stddev_per_round = np.asarray(lep_stddev_per_round)[isort]
-
-    # Check that we do not have duplicate data for the same distance as that will
-    # confuse the numerical methods used in this function.
+    leppr = np.asarray(leppr)[isort]
+    leppr_std = np.asarray(leppr_std)[isort]
+    # Check for duplicated data for the same distance to avoid
+    # numerical instability.
     unique_counts = np.unique_counts(distances)
-    non_unique_entries_mask = unique_counts.counts > 1
-    if np.any(non_unique_entries_mask):
+    if np.any(non_unique_entries_mask := unique_counts.counts > 1):
         non_unique_values = unique_counts.values[non_unique_entries_mask].tolist()
         msg = (
             "Multiple entries were provided for the following distances: "
@@ -255,18 +372,10 @@ def calculate_lambda_and_lambda_stddev(
         )
         raise ValueError(msg)
 
-    if method not in _LAMBDA_FITTING_METHODS:
-        warnings.warn(
-            "Got a fitting method that is not supported by this function "
-            f"('{method}'). Valid methods are {list(_LAMBDA_FITTING_METHODS)}."
-        )
-    lambda_fit_func: _LambdaFittingCallable = _LAMBDA_FITTING_METHODS.get(
-        method, _lambda_fit_with_d
-    )
-    res = lambda_fit_func(distances, lep_per_round, lep_stddev_per_round)
-    if res.lambda_ < 1.5 and min(distances) < 5:
+    lambda_fit: LambdaData = _LAMBDA_FIT_METHODS[method](distances, leppr, leppr_std)
+    if lambda_fit.lambda_ < 1.5 and min(distances) < 5:
         warnings.warn(
             "Lambda estimation is unreliable at low code distances and low values of "
             "lambda. Please use distance 5 as a minimum.",
         )
-    return res
+    return lambda_fit

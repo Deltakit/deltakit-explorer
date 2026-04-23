@@ -15,13 +15,13 @@ from deltakit_explorer.analysis import (
 
 
 def _lambda_interpolated(
-    lambda0: float,
-    lambda_: float,
-    distances: npt.NDArray[np.int_ | np.floating],
+    lambda0: npt.NDArray[np.floating],
+    lambda_: npt.NDArray[np.floating],
+    distances: npt.NDArray[np.int_],
 ) -> npt.NDArray[np.floating]:
-    """Estimate the logical error probability per round for given parameters.
+    """Interpolate the logical error probability per round for the given parameters.
 
-    The estimate is based on the formula
+    The interpolation is based on the formula
 
         ε = (1 / Λ₀) * Λ**(-(d + 1) / 2)
 
@@ -31,8 +31,8 @@ def _lambda_interpolated(
       - Λ is the error suppression factor,
       - d is the code distance.
 
-    For each distance in ``distances``, this function computes the corresponding
-    logical error probability using the supplied ``lambda_`` (Λ) and ``lambda0`` (Λ₀).
+    For each distance, this function computes the corresponding
+    logical error probability using the supplied Λ and Λ₀.
 
     Args:
         lambda0: Normalisation constant Λ₀.
@@ -49,7 +49,7 @@ def _lambda_interpolated(
 def _lep_interpolated(
     spam: float, leppr: float, rounds_interpolated: npt.NDArray[np.floating]
 ) -> npt.NDArray[np.floating]:
-    """Compute the logical error probability corresponding to the given parameters.
+    """Compute the logical error probability for the given parameters.
 
     The expected computation fidelity is modelled as
 
@@ -58,7 +58,7 @@ def _lep_interpolated(
     where:
       - F is the overall fidelity of the computation,
       - Fs is the fidelity of SPAM-related operations,
-      - Fε is the fidelity of a single quantum error-correction round,
+       Fε is the fidelity of a single quantum error-correction round,
       - r is the number of error-correction rounds performed.
 
     Each fidelity value is derived from its associated error probability using
@@ -169,44 +169,41 @@ class LambdaResult(Interpolated):
 
 def interpolate_lambda(
     lambda_data: LambdaData,
-    distances: npt.NDArray[np.int_],
     *,
     num_sigmas: int = 3,
     num_points: int = 200,
 ) -> LambdaResult:
-    """Compute the interpolated Lambda fit curve and its error band.
+    """Interpolate the Λ fit and compute confidence bands.
 
     Args:
-        lambda_data: Results from calculate_lambda_and_lambda_stddev (a :class:`LambdaData` instance).
-        distances: The code distances used for interpolation.
+        lambda_data: Result of a fit containing Λ, Λ₀, their standard deviations, and the original data.
         num_sigmas: Number of standard deviations for the error band. Default 3.
         num_points: Number of interpolation points. Default 200.
 
     Returns:
-        The interpolated fit data with error boundaries.
+        A container for the interpolated fit data with error boundaries and confidence interval.
     """
-    lambda_, lambda_stddev = lambda_data.lambda_, lambda_data.lambda_stddev
-    lambda0, lambda0_stddev = lambda_data.lambda0, lambda_data.lambda0_stddev
+    # Reshape distances into a (1, num_points) array for vectorisation
+    distances_interpolated = np.linspace(
+        lambda_data.distances[0], lambda_data.distances[-1], num_points
+    ).reshape(1, num_points)
 
-    distances_interpolated = np.linspace(distances[0], distances[-1], num_points)
-    interpolated = _lambda_interpolated(lambda0, lambda_, distances_interpolated)
-    lower_boundary = _lambda_interpolated(
-        lambda0 - num_sigmas * lambda0_stddev,
-        lambda_ - num_sigmas * lambda_stddev,
-        distances_interpolated,
-    )
-    upper_boundary = _lambda_interpolated(
-        lambda0 + num_sigmas * lambda0_stddev,
-        lambda_ + num_sigmas * lambda_stddev,
-        distances_interpolated,
+    # Offsets
+    offsets = np.array([-num_sigmas, 0.0, num_sigmas]) * lambda_data.lambda0_std
+
+    # Reshape interpolable parameters into (3, 1) arrays for vectorisation
+    lambda0_vals = (lambda_data.lambda0 + offsets).reshape(3, 1)
+    lambda_vals = (lambda_data.lambda_ + offsets).reshape(3, 1)
+
+    # Compute all curves at once
+    lower_boundary, interpolated, upper_boundary = _lambda_interpolated(
+        lambda0_vals, lambda_vals, distances_interpolated
     )
 
-    fit_label = (
-        f"Fit, Λ={lambda_:.4f} ± {num_sigmas * lambda_stddev:.4f} ({num_sigmas}σ)"  # noqa: RUF001
-    )
+    fit_label = f"Fit, Λ={lambda_data.lambda_:.4f} ± {offsets[2]:.4f} ({num_sigmas}σ)"  # noqa: RUF001
 
     return LambdaResult(
-        distances=distances_interpolated,
+        distances=distances_interpolated.ravel(),  # Reshape back into 1D array.
         interpolated=np.clip(interpolated, 0, 1),
         lower_boundary=np.clip(lower_boundary, 0, 1),
         upper_boundary=np.clip(upper_boundary, 0, 1),
@@ -240,7 +237,6 @@ class LogicalErrorProbabilityPerRoundResult(Interpolated):
 
 def interpolate_leppr(
     leppr_data: LEPPRData,
-    num_rounds: npt.NDArray[np.int_],
     *,
     num_sigmas: int = 3,
     num_points: int = 200,
@@ -249,33 +245,39 @@ def interpolate_leppr(
 
     Args:
         leppr_data: Results from compute_logical_error_per_round.
-        num_rounds: The number of rounds used for interpolation.
         num_sigmas: Number of standard deviations for the error band. Default 3.
         num_points: Number of interpolation points. Default 200.
 
     Returns:
         The interpolated fit data with error boundaries.
+
     """
-    leppr, leppr_stddev = leppr_data.leppr, leppr_data.leppr_stddev
-    spam, spam_stddev = leppr_data.spam_error, leppr_data.spam_error_stddev
+    # Reshape rounds into a (1, num_points) array for vectorisation
+    rounds_interpolated = np.linspace(
+        leppr_data.num_rounds[0], leppr_data.num_rounds[-1], num_points
+    ).reshape(1, num_points)
 
-    rounds_interpolated = np.linspace(num_rounds[0], num_rounds[-1], num_points)
-    interpolated = _lep_interpolated(spam, leppr, rounds_interpolated)
-    lower_boundary = _lep_interpolated(
-        spam - num_sigmas * spam_stddev,
-        leppr - num_sigmas * leppr_stddev,
-        rounds_interpolated,
+    # Offsets
+    spam_offsets = (
+        np.array([-num_sigmas, 0.0, num_sigmas]) * leppr_data.spam_error_stddev
     )
-    upper_boundary = _lep_interpolated(
-        spam + num_sigmas * spam_stddev,
-        leppr + num_sigmas * leppr_stddev,
-        rounds_interpolated,
+    leppr_offsets = np.array([-num_sigmas, 0.0, num_sigmas]) * leppr_data.leppr_stddev
+
+    # Reshape interpolable parameters into (3, 1) arrays for vectorisation
+    spam_vals = (leppr_data.spam_error + spam_offsets).reshape(3, 1)
+    leppr_vals = (leppr_data.leppr + leppr_offsets).reshape(3, 1)
+
+    # Compute all curves at once
+    lower_boundary, interpolated, upper_boundary = _lep_interpolated(
+        spam_vals, leppr_vals, rounds_interpolated
     )
 
-    fit_label = f"Fit, ε={leppr:.4f} ± {num_sigmas * leppr_stddev:.4f} ({num_sigmas}σ)"  # noqa: RUF001
+    fit_label = (
+        f"Fit, ε={leppr_data.leppr:.4f} ± {leppr_offsets[2]:.4f} ({num_sigmas}σ)"  # noqa: RUF001
+    )
 
     return LogicalErrorProbabilityPerRoundResult(
-        rounds=rounds_interpolated,
+        rounds=rounds_interpolated.ravel(),  # Reshape back into 1D array
         interpolated=np.clip(interpolated, 0, 1),
         lower_boundary=np.clip(lower_boundary, 0, 1),
         upper_boundary=np.clip(upper_boundary, 0, 1),
