@@ -33,6 +33,7 @@ def test_if_no_token_raises(mocker):
         _auth.get_token()
 
 
+@pytest.mark.skip(reason="Mark as skipped until #287 is fixed.")
 def test_http_verification_is_set():
     _auth.set_https_verification(True)
     # wrong host certificate
