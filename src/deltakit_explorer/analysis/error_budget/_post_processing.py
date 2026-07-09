@@ -71,7 +71,7 @@ def compute_lambda_and_stddev_from_results(
             data, xi[:, i], noise_parameter_names
         )
         res = _compute_lambda_from_results(num_rounds_by_distance, filtered_data)
-        ret[0, i], stddev[0, i] = res.lambda_, res.lambda_stddev
+        ret[0, i], stddev[0, i] = res.lambda_, res.lambda_std
     return ret, stddev
 
 
@@ -142,8 +142,15 @@ def _extract_counts_from_results(
     max_shots: list[int] = []
     for nrounds in num_rounds:
         data_row = data.query(f"num_rounds == {nrounds}")
-        num_fails.append(data_row["fails"].to_numpy()[0])
-        max_shots.append(data_row["shots"].to_numpy()[0])
+        # Sum across rows: when a sweep contains duplicate rows at the same
+        # (noise_parameters, distance, num_rounds), each row carries an
+        # independent shot batch from the simulation. The previous
+        # behaviour ([0]) silently discarded every batch beyond the first,
+        # which is invisible for LINEAR/LOGARITHMIC sweeps (no duplicates)
+        # but breaks designs that intentionally replicate (e.g., c-optimal).
+        num_fails.append(int(data_row["fails"].to_numpy().sum()))
+        max_shots.append(int(data_row["shots"].to_numpy().sum()))
+    # Filter out 0 fails
     non_zeros_mask = np.asarray(num_fails) != 0
     if not np.all(non_zeros_mask):
         warnings.warn(

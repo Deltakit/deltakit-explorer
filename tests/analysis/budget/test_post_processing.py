@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from deltakit_explorer.analysis.error_budget._post_processing import (
+    _compute_logical_error_rate_per_round_from_results,
     _filter_non_close_noise_parameters,
     compute_lambda_interval_from_results,
 )
@@ -113,3 +114,39 @@ def test_filter_non_close_noise_parameters_random(
     filtered_columns_data_frame = data_frame[all_noises_index]
     for row in filtered_columns_data_frame.to_numpy():
         np.testing.assert_allclose(row, random_parameters)
+
+
+def test_duplicate_rows_aggregate_via_sum() -> None:
+    """Regression test: when several rows share the same ``(distance,
+    num_rounds)``, the post-processing must sum their fails/shots rather than
+    take only the first row. Without this, sweep designs that intentionally
+    replicate (e.g., c-optimal) silently lose every batch beyond the first.
+    """
+    # Two batches per (distance, num_rounds), drawn from a synthetic model
+    # with LEPpR ~ 0.05, so LEP(r) = (1 - (1 - 2*LEPpR)**r) / 2. The buggy
+    # ``[0]``-indexed path would use only the first batch; the correct
+    # ``.sum()`` path produces a result equivalent to a single batch with the
+    # pooled counts.
+    data = pd.DataFrame(
+        [
+            {"distance": 3, "num_rounds": 3, "fails": 135, "shots": 1000},
+            {"distance": 3, "num_rounds": 3, "fails": 140, "shots": 1000},
+            {"distance": 3, "num_rounds": 5, "fails": 205, "shots": 1000},
+            {"distance": 3, "num_rounds": 5, "fails": 210, "shots": 1000},
+            {"distance": 3, "num_rounds": 7, "fails": 261, "shots": 1000},
+            {"distance": 3, "num_rounds": 7, "fails": 265, "shots": 1000},
+        ]
+    )
+    result = _compute_logical_error_rate_per_round_from_results([3, 5, 7], data)
+
+    pooled = pd.DataFrame(
+        [
+            {"distance": 3, "num_rounds": 3, "fails": 275, "shots": 2000},
+            {"distance": 3, "num_rounds": 5, "fails": 415, "shots": 2000},
+            {"distance": 3, "num_rounds": 7, "fails": 526, "shots": 2000},
+        ]
+    )
+    expected = _compute_logical_error_rate_per_round_from_results([3, 5, 7], pooled)
+
+    assert pytest.approx(expected.leppr) == result.leppr
+    assert pytest.approx(expected.leppr_stddev) == result.leppr_stddev
