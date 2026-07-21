@@ -1,13 +1,111 @@
-# Linting configuration for deltakit_explorer.
+# Linting configuration for deltakit-explorer.
 #
 # General and format configurations are repository-wide for the moment.
-extend = "../ruff.toml"
+# Repository-wide Ruff configuration.
+#
+# Should only contain project-wide configuration.
+#
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".github",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pixi",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "*.ipynb",
+    "_version.py",
+]
+
+# Only include source code and tests.
 include = ["src/deltakit_explorer/**/*.py", "tests/**/*.py"]
 
+# Same as Black.
+line-length = 88
+indent-width = 4
+
+# Assume Python 3.10
+target-version = "py310"
+
 [lint]
+preview = true
+explicit-preview-rules = true
+select = [
+    "A",
+    "ARG",
+    "B",
+    "C4",
+    "E",
+    "EM",
+    "EXE",
+    "F",
+    "FURB",
+    "G",
+    "I",
+    "ICN",
+    "N",
+    "NPY",
+    "PD",
+    "PGH",
+    "PIE",
+    "PL",
+    "PT",
+    "PTH",
+    "PYI",
+    "RET",
+    "RUF",
+    "SIM",
+    "T",
+    "UP",
+    "W",
+    "YTT",
+    # Explicit preview rules
+    "CPY001",
+]
 ignore = [
+    # deltakit-explorer does not yet fully follow Ruff/Black formatting, and so long lines exist.
+    # This should be fixed eventually, but is not urgent.
+    # This ignore is stylistic, and so should not hide potential bugs.
+    "E501",
+    # Magic constants are not an urgent issue. This check is ignored for the moment.
+    "PLR2004",
+    # Too many arguments in function.
+    # Most of the functions/methods flagged by this check are fine (maximum is 8
+    # parameters instead of the maximum allowed of 5). This rule might be removed by
+    # directly changing the threshold of "maximum number of allowed parameters for one
+    # function".
+    # This check cannot "hide" potential bugs.
+    "PLR0913",
+    # Use of `zip` without the `strict` argument.
+    # For the moment we keep this ignore as technical debt. It will be properly removed
+    # in a future PR.
+    "B008", # Default argument evaluation with class instantiation.
+    "B905", # Missing `strict` argument to `zip`
+    # Having an explicit argument to open() for the open mode is nice.
+    "UP015",
     "B",       # many manual adjustments required
-    "E501",    # line length > 88 (fix later)
     "N",       # manual adjustment required
     "PLR2004", # magic values, especially in tests
     "PLR0912",
@@ -23,6 +121,7 @@ ignore = [
 fixable = ["ALL"]
 unfixable = []
 
+# Specific per-file ignores
 [lint.per-file-ignores]
 "__init__.py" = ["F401"]
 # Comments are using unicode symbol for sigma for better readability, but it looks like
@@ -31,4 +130,40 @@ unfixable = []
 "tests/**/*.py" = [
     # Temporary ignore.
     "RUF043",
+    # Tests don't need copyright notices
+    "CPY001",
 ]
+
+[lint.flake8-copyright]
+# Ruff configuration for enforcing copyright notices (https://docs.astral.sh/ruff/rules/missing-copyright-notice/)
+# We are enforcing the style presented in https://riverlane.atlassian.net/wiki/x/VgBJhg
+notice-rgx = "(?i)\\(c\\) Copyright Riverlane \\d{4}-2026. All rights reserved."
+# Avoid enforcing a header on empty (<10 bytes) files
+min-file-size = 10
+
+[format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+#
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future.
+docstring-code-format = true
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"
