@@ -1,3 +1,4 @@
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 from collections.abc import Callable
 from dataclasses import dataclass
 

@@ -1,3 +1,4 @@
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 from dataclasses import dataclass
 
 import numpy as np
