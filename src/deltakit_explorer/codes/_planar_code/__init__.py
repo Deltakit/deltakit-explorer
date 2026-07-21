@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module provides classes to define quantum memory experiments for
 planar unrotated and rotated codes. It is not currently public; this

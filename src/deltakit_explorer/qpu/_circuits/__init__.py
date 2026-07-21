@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module aggregates functions to manipulate `deltakit_circuit.Circuit` objects.
 These include native gate compilation, noise introduction,

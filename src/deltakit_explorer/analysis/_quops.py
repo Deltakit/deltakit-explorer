@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """Module explores how the error suppression factor (lambda)
 builds a connection between QuOps and code distance.
 

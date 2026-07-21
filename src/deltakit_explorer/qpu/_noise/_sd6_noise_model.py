@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module includes implementation of a standard depolarising noise model, SD6.
 This noise model sets all error probabilities to a single value p.

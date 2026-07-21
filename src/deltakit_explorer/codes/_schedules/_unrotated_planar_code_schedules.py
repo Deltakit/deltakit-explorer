@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 Collection of dictionaries for different types of schedules for unrotated planar
 codes.

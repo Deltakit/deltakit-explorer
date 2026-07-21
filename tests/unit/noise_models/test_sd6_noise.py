@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 import pytest
 from deltakit_circuit import Circuit, GateLayer, NoiseContext, NoiseLayer, Qubit
 from deltakit_circuit.gates import CX, MRX, MRY, MRZ, MZ, RZ, H, X, Y

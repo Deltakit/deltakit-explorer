@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module stores an implementation of a function to construct a
 circuit for a quantum memory experiment with a Calderbank-Shor-Steane

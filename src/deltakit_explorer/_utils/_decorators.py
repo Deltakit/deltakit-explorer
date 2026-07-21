@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """This file contains decorators which guard client's input.
 Using decorators is motivated by separation of logic with parameter
 validation.

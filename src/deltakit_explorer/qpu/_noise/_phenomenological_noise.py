@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module includes implementations of phenomenological
 noise. `PhenomenologicalNoise` adds noise to `I` gates.

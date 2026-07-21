@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 from deltakit_explorer.codes._bivariate_bicycle_code import (
     BivariateBicycleCode,
     Monomial,

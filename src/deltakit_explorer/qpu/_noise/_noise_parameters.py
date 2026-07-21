@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 * `NoiseParameters` treats the quantum system in terms of one- and two-qubit
     noise, which comes together with gate application, measurement, reset,
