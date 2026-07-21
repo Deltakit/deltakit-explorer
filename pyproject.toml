@@ -187,7 +187,8 @@ labeler = "labeler"
 unrealized = "unrealized"
 writeable = "writeable"           # Used in numpy APIs.
 CPY = "CPY"                       # A ruff rule identifier
-
+minimize = "minimize"
+Normalize = "Normalize"
 
 [tool.typos.files]
 # Paths/patterns to exclude from spell checking
