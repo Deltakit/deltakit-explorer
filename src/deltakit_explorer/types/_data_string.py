@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """This module contains an implementation of a data string wrapper,
 which allows to send arbitrary data inside a request, without creating files.
 """

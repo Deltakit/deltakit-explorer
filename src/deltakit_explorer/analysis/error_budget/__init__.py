@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """Provide functions to perform error-budgeting estimations."""
 
 from ._budget import get_error_budget

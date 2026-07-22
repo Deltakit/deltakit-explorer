@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module defines Enums used in hardware-aware noise modelling.
 These enums are used in `qpus/_qpu_factory.py` and

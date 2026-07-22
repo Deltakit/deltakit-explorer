@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """Asymmetric binomial confidence intervals for error-rate estimates.
 
 A logical error probability estimated from ``num_hits`` failures out of

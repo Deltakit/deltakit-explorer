@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltakit-explorer"
-version = "0.9.0"
+version = "0.9.1"
 description = "Deltakit (component deltakit-explorer)"
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
@@ -25,6 +25,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: Quantum Computing",
@@ -32,25 +33,29 @@ classifiers = [
 ]
 
 dependencies = [
-  "deltakit-core>=0.8.0",
-  "deltakit-circuit>=0.8.0",
-  "deltakit-decode>=0.8.0",
-  "gql[requests]>=3.5,<5.0",
-  "graphql_core~=3.2",
-  "numpy~=2.0",
-  "scipy~=1.15",
-  # Upper bound due to github.com/Deltakit/deltakit/issues/284
-  "matplotlib>=3.10,<3.11",
+  "deltakit-core>=0.9.0",
+  "deltakit-circuit>=0.9.0",
+  "deltakit-decode>=0.9.0",
+  "gql[requests]>=3.5,<5",
+  "graphql_core >=3.2.11, <4",
+  # capped at 2.5 because 2.5.0 removed row_stack which is used by numba, which is
+  # used by galois, and neither of these have handled this error themselves.
+  "numpy >=2.0, <2.5",
+  "numpy >=2.3.2, <2.5; python_version >= '3.14'",
+  "scipy >=1.15.3, <2",
+  "scipy >=1.16.2, <2; python_version >= '3.14'",
+  "matplotlib >=3.10.9, <3.11",
   "deltakit-stim>=0.2,<0.3",
-  "requests~=2.32",
-  "tqdm~=4.66",
-  "galois>=0.4.6,~=0.4",
-  "typing_extensions~=4.0",
-  "packaging>=25.0",
-  "adjustText~=1.3",
-  "pandas>=2.2.2",
-  "pandas~=2.3; python_version >= '3.13'",
-  "ldpc~=2.2",
+  "requests >=2.32, <3",
+  "tqdm >=4.66, <5",
+  "galois >=0.4.11,<=0.5",
+  "typing_extensions >=4.15, <5",
+  "packaging>=25,<27",
+  "adjustText >=1.3, <2",
+  "pandas >=2.2.2, <3",
+  "pandas >=2.3.3, <3; python_version >= '3.13'",
+  "ldpc >=2.2, <3",
+  "ldpc >=2.3.10, <3; python_version >= '3.14'",
   # >=3.2.3: earlier 3.2 releases import the deprecated ``numpy.core`` in
   # ``unumpy``, which fails under the test suite's ``filterwarnings = error``.
   "uncertainties>=3.2.3,<4",
@@ -68,10 +73,11 @@ Changelog = "https://github.com/Deltakit/deltakit/releases"
 
 [dependency-groups]
 test = [
-  "pytest>=9.0",
-  "pytest-cov>=7.0",
+  "pytest >=9.0, <10",
+  "pytest-cov >=7, <8",
+  "pytest-skip-slow>=0.0.5,<1.2",
+  "coverage >=7.7.0, <8",
   "pytest-mock>=3.14",
-  "pytest-skip-slow>=0.0.5",
   "pytest-lazy-fixtures>=1.0",
 ]
 stubs = [
@@ -84,17 +90,25 @@ stubs = [
 ]
 lint = [
   "mypy>=1.17,<3.0",
-  "ruff~=0.14",
-  "typos~=1.34",
-  "deptry~=0.23",
-  "pydoclint~=0.8",
+  "ruff==0.15.22",
+  "typos >=1.34, <2",
+  "deptry>=0.23,<0.26",
+  "pydoclint>=0.9,<0.10",
   { include-group = "stubs" },
 ]
-security = ["bandit~=1.8", "pip-audit~=2.7"]
+security = ["bandit[toml] >=1.8, <2", "pip-audit >=2.7, <3"]
 dev = [
   { include-group = "test" },
   { include-group = "lint" },
   { include-group = "security" },
+  "pre-commit >=4.2, <5",
+  "validate-pyproject >=0.24.1,<0.26",
+]
+release = [
+  "python-semantic-release >=10.6.1, <11",
+  "packaging >=25.0, <27",
+  "requests>=2.32.0",
+  "tomlkit<0.16,>=0.13",
 ]
 
 [tool.deptry]
@@ -137,3 +151,52 @@ skip-checking-short-docstrings = false
 # For the moment, we have a baseline of documentation format errors. Eventually, this will
 # be removed.
 baseline = ".pydoclint_baseline.txt"
+
+[tool.typos.default]
+locale = 'en-gb'
+extend-ignore-re = [
+  # Ignore jupyter notebook cell IDs
+  "\"id\"\\s*:\\s*\"[0-9a-f]{8,}\"",
+]
+
+[tool.typos.default.extend-words]
+# Don't correct "iy" - often used in the context of "probability of an IY operation"
+iy = "iy"
+iz = "iz"
+IZ = "IZ"
+anc = "anc"
+BA = "BA"
+youre = "you're"
+distribtuion = "distribution"
+interm = "interm"
+ket = "ket"
+ND = "ND"                         # part of NDArray
+Alise = "Alise"
+DEPOLARIZE = "DEPOLARIZE"
+depolarization = "depolarization"
+depolarizing = "depolarizing"
+Authorization = "Authorization"   # Web-related field.
+color = "color"                   # Used in matplotlib and stim APIs.
+colors = "colors"
+optimize = "optimize"             # scipy.optimize
+ax = "ax"                         # Typical naming for matplotlib Axes instances.
+center = "center"
+stabilizer = "stabilizer"
+stabilizers = "stabilizers"
+synchronize = "synchronize"       # multiprocessing import
+neighbors = "neighbors"
+capitalize = "capitalize"
+labeled = "labeled"
+labeler = "labeler"
+unrealized = "unrealized"
+writeable = "writeable"           # Used in numpy APIs.
+CPY = "CPY"                       # A ruff rule identifier
+minimize = "minimize"
+Normalize = "Normalize"
+
+[tool.typos.files]
+# Paths/patterns to exclude from spell checking
+extend-exclude = [
+  "**/LICENSE",
+  "**/*.html",
+]

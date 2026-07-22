@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 Classes and functions to encapsulate syndrome extraction schedules for Planar codes.
 This module is not currently public; this __init__.py file is a historical artefact

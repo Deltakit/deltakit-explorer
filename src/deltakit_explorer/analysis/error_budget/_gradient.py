@@ -1,3 +1,4 @@
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
 import numpy as np

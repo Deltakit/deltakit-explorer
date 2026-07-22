@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """Result types for plotting LEPPR and Lambda data."""
 
 from __future__ import annotations

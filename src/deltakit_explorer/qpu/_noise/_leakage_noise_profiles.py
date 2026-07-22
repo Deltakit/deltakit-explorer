@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module includes noise profiles to add leakage to noise models.
 Defines noise profiles for leakage and relaxation contexts parameterised

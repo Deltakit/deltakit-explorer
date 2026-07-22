@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """Description of ``deltakit.explorer.visualisation`` namespace here."""
 
 from deltakit_explorer.plotting._correlation_matrix import (

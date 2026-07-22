@@ -1,3 +1,4 @@
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 from enum import Enum, auto
 from typing import Protocol
 

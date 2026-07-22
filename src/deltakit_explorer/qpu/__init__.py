@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 from deltakit_explorer.qpu._native_gate_set import (
     ExhaustiveGateSet,
     NativeGateSet,

@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module includes implementation of a SI1000 noise model.
 Toy noise is a default choice of noise parameters to explore codes

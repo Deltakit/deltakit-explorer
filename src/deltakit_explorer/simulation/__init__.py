@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """Description of ``deltakit.explorer.simulation`` namespace here."""
 
 from deltakit_explorer.simulation._stim_simulation import simulate_with_stim

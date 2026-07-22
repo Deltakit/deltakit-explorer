@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module defines a class for a CSS code. The class includes
 multiple validity checks and provides methods to generate encoding,

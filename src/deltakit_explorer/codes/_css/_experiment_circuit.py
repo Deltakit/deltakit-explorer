@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 This module provides a function which constructs a `deltakit.circuit.Circuit`
 from a sequence of stages.

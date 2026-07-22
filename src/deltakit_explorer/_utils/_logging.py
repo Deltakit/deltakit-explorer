@@ -1,4 +1,4 @@
-# (c) Copyright Riverlane 2020-2025.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 """
 The `Logging` class is a service class which enables keeping track of the calls
 made and errors which occurred. In the log file, `./client.log`, there will be a
