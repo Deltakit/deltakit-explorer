@@ -33,9 +33,6 @@ classifiers = [
 ]
 
 dependencies = [
-  "packaging >=25.0, <27",
-  "requests >=2.32.0",
-  "tomlkit >=0.13,<0.16",
   "deltakit-core>=0.9.0",
   "deltakit-circuit>=0.9.0",
   "deltakit-decode>=0.9.0",
@@ -48,7 +45,7 @@ dependencies = [
   "scipy >=1.15.3, <2",
   "scipy >=1.16.2, <2; python_version >= '3.14'",
   "matplotlib >=3.10.9, <3.11",
-  "deltakit-stim>=0.2,<0.3",
+  "deltakit-stim>=0.2.1,<0.3",
   "requests >=2.32, <3",
   "tqdm >=4.66, <5",
   "galois >=0.4.11,<=0.5",
@@ -200,7 +197,4 @@ Normalize = "Normalize"
 
 [tool.typos.files]
 # Paths/patterns to exclude from spell checking
-extend-exclude = [
-  "**/LICENSE",
-  "**/*.html",
-]
+extend-exclude = ["**/LICENSE", "**/*.html"]
