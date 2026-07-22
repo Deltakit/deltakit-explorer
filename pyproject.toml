@@ -33,6 +33,9 @@ classifiers = [
 ]
 
 dependencies = [
+  "packaging >=25.0, <27",
+  "requests >=2.32.0",
+  "tomlkit >=0.13,<0.16",
   "deltakit-core>=0.9.0",
   "deltakit-circuit>=0.9.0",
   "deltakit-decode>=0.9.0",
