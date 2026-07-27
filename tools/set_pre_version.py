@@ -34,13 +34,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "-c",
         "--commit",
+        default=None,
         help=(
             "Prerelease version short commit hash suffix."
         ),
     )
     args = parser.parse_args()
     timestamp_version_suffix = args.timestamp
-    commit_version_suffix = args.commit
+
+    commit_version_suffix = ".g" + args.commit if args.commit is not None else ""
 
     # Update project version with suffix
     path = PROJ_HOME / "pyproject.toml"
@@ -53,7 +55,7 @@ if __name__ == "__main__":
     prerelease_version = f"{version.major}.{version.minor}.{version.micro + 1}"
     data["project"]["version"] = (
         prerelease_version +
-        f".dev{timestamp_version_suffix}+g{commit_version_suffix}"
+        f".dev{timestamp_version_suffix}{commit_version_suffix}"
     )
 
     # Write updated data to file

@@ -105,7 +105,7 @@ jobs:
           git config --global --add safe.directory /__w/deltakit_explorer/deltakit_explorer
           COMMIT_HASH=$(git rev-parse --short HEAD)
           SECS_SINCE_EPOCH=$(date +%s)
-          uv run --no-sync python3 -m tools.set_pre_version -t "$SECS_SINCE_EPOCH" -c "$COMMIT_HASH"
+          uv run --no-sync python3 -m tools.set_pre_version -t "$SECS_SINCE_EPOCH"
       - name: Commit current state of project
         run: |
           git config user.name "riv-dev-bot"
@@ -143,7 +143,7 @@ jobs:
 
   publish:
     name: Publish Python distribution to PyPI
-    needs: [test-wheel, test-sdist]
+    needs: [build-wheels-for-publishing]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -151,10 +151,12 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
+      - name: Make dist dir
+        run: mkdir ./dist
       - name: Recover deltakit-explorer distribution files
         uses: actions/download-artifact@v8
         with:
-          pattern: ${{ env.pkg_name }}
+          pattern: publish-${{ env.pkg_name }}
           path: ./dist/
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
