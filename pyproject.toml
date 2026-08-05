@@ -116,7 +116,13 @@ files = "src/**/*.py"
 # The below list of disabled checks should eventually be empty.
 disable_error_code = "arg-type,assignment,attr-defined,dict-item,index,list-item,misc,operator,override,return-value,union-attr,var-annotated"
 
-# for ruff configuration, see `ruff.toml`
+[[tool.mypy.overrides]]
+module = ["adjustText"]
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["uncertainties", "uncertainties.umath", "uncertainties.unumpy"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["./tests/"]
