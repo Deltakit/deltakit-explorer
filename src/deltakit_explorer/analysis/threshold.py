@@ -22,6 +22,20 @@ def get_error_bar(lep: float, num_shots: int) -> float:
 
 
 class ThresholdEstimator:
+""" Estimates the quantum threshold for a given code and noise model.
+
+    Uses a bisection search algorithm to find the physical error rate
+    at which logical error probabilities cross over for different code distances.
+
+    Attributes:
+        min_p (float): The lower bound of the bisection search.
+        max_p (float): The upper bound of the bisection search.
+        precision (float): The target precision for the threshold value.
+        num_shots (int): The initial number of shots for simulations.
+        code_class (type): The class of the quantum code to simulate.
+        noise_model_class (type): The class of the noise model to apply.
+    """
+    
     def __init__(
         self, 
         min_p: float = 0.001, 
@@ -42,7 +56,7 @@ class ThresholdEstimator:
     
     def run_simulation(self, p_value: float, distance: int, shots: int) -> float:
         """Run a single simulation at a specific physical error rate and distance."""
-        code = codes.RotatedPlanarCode(width=distance, height=distance)
+        code = self.code_class(width=distance, height=distance)
         circuit = css_code_memory_circuit(
             code,
             num_rounds=distance,
@@ -50,7 +64,7 @@ class ThresholdEstimator:
         )
         compiled_circuit = circuit.as_stim_circuit()
         
-        noise_model = SI1000NoiseModel(p=p_value, p_l=0.0)
+        noise_model = self.noise_model_class(p=p_value, p_l=0.0)
         noisy_circuit = self.client.add_noise(
             stim_circuit=compiled_circuit,
             noise_model=noise_model,
@@ -75,12 +89,15 @@ class ThresholdEstimator:
         print(f"Starting bisection search between {self.min_p} and {self.max_p}...")
         
         while (self.max_p - self.min_p) > self.precision:
-            mid_p = (self.min_p + self.max_p) / 2
+            mid_p: float = (self.min_p + self.max_p) / 2.0
             print(f"\n--- Testing new midpoint: p = {mid_p} ---")
             
-            
-            current_shots = self.num_shots
-            overlap = True
+            # current_shots tracks the dynamic number of shots; it increases if error bars overlap
+            current_shots: int = self.num_shots
+
+
+            # overlap acts as a flag to control the while loop until statistical certainty is reached
+            overlap: bool = True
             SAFETY = 0.8  
 
             while overlap:
