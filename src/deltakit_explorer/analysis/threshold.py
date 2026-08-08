@@ -5,15 +5,15 @@ import matplotlib.pyplot as plt
 import logging
 import concurrent.futures
 
-from deltakit.explorer.simulation import simulate_with_stim
-from deltakit.explorer.enums import DecoderType
-from deltakit.explorer.types import (
+from deltakit_explorer.simulation import simulate_with_stim
+from deltakit_explorer.enums import DecoderType
+from deltakit_explorer.types import (
     Decoder,
     SI1000NoiseModel,
 )
-from deltakit.explorer import codes
-from deltakit.explorer.codes import css_code_memory_circuit
-from deltakit.circuit.gates import PauliBasis
+from deltakit_explorer import codes
+from deltakit_explorer.codes import css_code_memory_circuit
+from deltakit_circuit.gates import PauliBasis
 
 logger = logging.getLogger(__name__)
 
