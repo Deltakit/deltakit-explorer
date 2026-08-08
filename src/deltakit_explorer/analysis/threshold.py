@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import math
-import matplotlib.pyplot as plt
 import logging
 import concurrent.futures
 
-from deltakit_explorer.simulation import simulate_with_stim
+from deltakit_explorer import Client
 from deltakit_explorer.enums import DecoderType
 from deltakit_explorer.types import (
     Decoder,
@@ -18,29 +17,16 @@ from deltakit_circuit.gates import PauliBasis
 logger = logging.getLogger(__name__)
 
 def get_error_bar(lep: float, num_shots: int) -> float:
-    """Calculates the standard error (1-sigma error bar) for a given LEP."""
     if lep == 0:
         return 0.0
     return math.sqrt((lep * (1.0 - lep)) / num_shots)
 
 
 class ThresholdEstimator:
-    """ Estimates the quantum threshold for a given code and noise model.
-
-    Uses a bisection search algorithm to find the physical error rate
-    at which logical error probabilities cross over for different code distances.
-
-    Attributes:
-        min_p : The lower bound of the bisection search.
-        max_p : The upper bound of the bisection search.
-        precision : The target precision for the threshold value.
-        num_shots : The initial number of shots for simulations.
-        code_class : The class of the quantum code to simulate.
-        noise_model_class : The class of the noise model to apply.
-    """
-    
+    # Notice client is right here!
     def __init__(
         self, 
+        client: Client,
         min_p: float = 0.001, 
         max_p: float = 0.05, 
         precision: float = 0.0001, 
@@ -48,19 +34,16 @@ class ThresholdEstimator:
         code_class = codes.RotatedPlanarCode,
         noise_model_class = SI1000NoiseModel
     ):
-        
         self.min_p = min_p
         self.max_p = max_p
         self.precision = precision
         self.num_shots = num_shots
-
         self.code_class = code_class
         self.noise_model_class = noise_model_class
-        
         self.decoder = Decoder(DecoderType.MWPM)
+        self.client = client
 
     def run_simulation(self, p_value: float, distance: int, shots: int) -> float:
-        """Run a single simulation at a specific physical error rate and distance."""
         code = self.code_class(width=distance, height=distance)
         compiled_circuit = css_code_memory_circuit(
             code,
@@ -70,18 +53,26 @@ class ThresholdEstimator:
         
         noise_model = self.noise_model_class(p=p_value, p_l=0.0)
         
-        # Look here! We replaced all the self.client calls with the new local simulator
-        decode_result = simulate_with_stim(
+        noisy_circuit = self.client.add_noise(
             stim_circuit=compiled_circuit,
             noise_model=noise_model,
+        )
+        
+        measurements, _ = self.client.simulate_stim_circuit(
+            stim_circuit=noisy_circuit,
+            shots=shots,
+        )
+        
+        decode_result = self.client.decode_measurements(
+            measurements=measurements,
             decoder=self.decoder,
-            shots=shots
+            ideal_stim_circuit=compiled_circuit,
+            noise_model=noise_model,
         )
         
         return decode_result.get_logical_error_probability()
 
     def run_single_pair_search(self, d_low: int, d_high: int) -> float:
-        """Execute the bisection search to find the threshold for ONE pair."""
         current_min = self.min_p
         current_max = self.max_p
         
@@ -112,14 +103,10 @@ class ThresholdEstimator:
                         required_shots = current_shots * (combined_error / (SAFETY * gap)) ** 2
                         
                     new_shots = math.ceil(required_shots)
-                    logger.info(f"Gap={gap:.3e}, Error={combined_error:.3e}. Increasing shots to {new_shots:,}")
                     current_shots = new_shots
                 else:
                     overlap = False
                     
-            logger.info(f"d={d_low}, p={mid_p} -> Final LEP: {lep_low} (Shots: {current_shots:,})")
-            logger.info(f"d={d_high}, p={mid_p} -> Final LEP: {lep_high} (Shots: {current_shots:,})")
-            
             if lep_low > lep_high:
                 current_min = mid_p
             elif lep_low < lep_high:
@@ -127,42 +114,16 @@ class ThresholdEstimator:
             else:
                 break
                 
-        threshold = (current_min + current_max) / 2.0
-        logger.info(f"Estimated Threshold for d={d_low},{d_high}: {threshold}")
-        return threshold
+        return (current_min + current_max) / 2.0
 
     def run_parallel_searches(self, distance_pairs: list[tuple[int, int]]) -> dict:
-        """Computes thresholds for multiple distance pairs in parallel."""
-        logger.info(f"Starting parallel threshold search for {len(distance_pairs)} pairs...")
-        
         results = {}
-        
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = {
                 executor.submit(self.run_single_pair_search, d_low, d_high): (d_low, d_high) 
                 for d_low, d_high in distance_pairs
             }
-            
             for future in concurrent.futures.as_completed(futures):
                 pair = futures[future]
-                try:
-                    threshold = future.result()
-                    results[pair] = threshold
-                except Exception as e:
-                    logger.error(f"Pair {pair} failed with error: {e}")
-                    
+                results[pair] = future.result()
         return results
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    
-    estimator = ThresholdEstimator()
-    
-    pairs_to_test = [(3, 5), (5, 7), (7, 9)]
-    
-    final_results = estimator.run_parallel_searches(pairs_to_test)
-    
-    logger.info("--- FINAL THRESHOLD RESULTS ---")
-    for pair, threshold in final_results.items():
-        logger.info(f"Distances {pair}: Threshold = {threshold}")
