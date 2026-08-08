@@ -1,6 +1,6 @@
 import math
 from unittest.mock import MagicMock, patch
-from src.deltakit_explorer.analysis.threshold import ThresholdEstimator, get_error_bar
+from deltakit_explorer.analysis.threshold import ThresholdEstimator, get_error_bar
 
 def test_get_error_bar():
     """Test that the math for the standard error works correctly."""
