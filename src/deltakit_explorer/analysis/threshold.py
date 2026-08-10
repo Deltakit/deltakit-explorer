@@ -102,9 +102,7 @@ class ThresholdEstimator:
          
         qpu = QPU(qubits=compiled_circuit.qubits, noise_model=noise_model)
          
-        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit)
-         
-        dk_stim_circuit = noisy_circuit.as_stim_circuit()
+        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit).as_stim_circuit()
 
         pure_stim_circuit = stim.Circuit(str(dk_stim_circuit))
          
