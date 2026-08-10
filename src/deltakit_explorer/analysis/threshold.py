@@ -56,17 +56,17 @@ class ThresholdEstimator:
         decoder: The decoding algorithm type used.
         history_data: Storage dictionary tracking simulation outcomes.
     """
-    
-    def __init__(
+   def __init__(
         self,
-        min_p: float = 0.001, 
-        max_p: float = 0.05, 
-        precision: float = 0.0001, 
+        min_p: float = 0.001,
+        max_p: float = 0.05,
+        precision: float = 0.0001,
         num_shots: int = 100_000,
         code_class: type = codes.RotatedPlanarCode,
         noise_model_class: type = SI1000NoiseModel,
-        decoder: Decoder | None = None
-    ):
+        decoder: Decoder | None = None,
+    ): 
+
     
         """Initializes the ThresholdEstimator with target bounds and parameters."""
         self.min_p = min_p
@@ -106,9 +106,7 @@ class ThresholdEstimator:
 
         qpu = QPU(qubits=compiled_circuit.qubits, noise_model=noise_model)
          
-        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit)
-         
-        dk_stim_circuit = noisy_circuit.as_stim_circuit()
+        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit).as_stim_circuit()
 
         pure_stim_circuit = stim.Circuit(str(dk_stim_circuit))
          
