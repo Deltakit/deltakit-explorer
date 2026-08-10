@@ -42,10 +42,9 @@ def get_error_bar(lep: float, num_shots: int) -> float:
         return 0.0
     return math.sqrt((lep * (1.0 - lep)) / num_shots)
 
-
 class ThresholdEstimator:
     """Estimates the quantum error correction threshold using bisection search.
-
+        
     Attributes:
         min_p: The lower bound of the physical error rate search range.
         max_p: The upper bound of the physical error rate search range.
@@ -56,7 +55,7 @@ class ThresholdEstimator:
         decoder: The decoding algorithm type used.
         history_data: Storage dictionary tracking simulation outcomes.
     """
-   def __init__(
+    def __init__(
         self,
         min_p: float = 0.001,
         max_p: float = 0.05,
@@ -65,9 +64,7 @@ class ThresholdEstimator:
         code_class: type = codes.RotatedPlanarCode,
         noise_model_class: type = SI1000NoiseModel,
         decoder: Decoder | None = None,
-    ): 
-
-    
+    ):
         """Initializes the ThresholdEstimator with target bounds and parameters."""
         self.min_p = min_p
         self.max_p = max_p
@@ -75,7 +72,7 @@ class ThresholdEstimator:
         self.num_shots = num_shots
         self.code_class = code_class
         self.noise_model_class = noise_model_class
-        self.decoder = decoder if decoder is not None else Decoder(DecoderType.MWPM)
+        self.decoder = decoder if decoder is not None else Decoder(decoder_type=DecoderType.MWPM)
         self.history_data = {}
 
 
