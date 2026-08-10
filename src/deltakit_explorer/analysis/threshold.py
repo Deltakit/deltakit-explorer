@@ -42,6 +42,7 @@ def get_error_bar(lep: float, num_shots: int) -> float:
         return 0.0
     return math.sqrt((lep * (1.0 - lep)) / num_shots)
 
+
 class ThresholdEstimator:
     """Estimates the quantum error correction threshold using bisection search.
         
@@ -75,7 +76,6 @@ class ThresholdEstimator:
         self.decoder = decoder if decoder is not None else Decoder(decoder_type=DecoderType.MWPM)
         self.history_data = {}
 
-
     def run_simulation(self, p_value: float, distance: int, shots: int) -> float:
         """Executes a quantum memory circuit simulation under a specific physical error rate.
 
@@ -87,28 +87,28 @@ class ThresholdEstimator:
         Returns:
             The measured logical error probability (lep).
         """
-         
         code = self.code_class(width=distance, height=distance)
         compiled_circuit = css_code_memory_circuit(
             code,
             num_rounds=distance,
             logical_basis=PauliBasis.Z,
         )
-         
 
         try:
             noise_model = self.noise_model_class(p=p_value, p_l=0.0)
         except TypeError:
-            noise_model = self.noise_model_class(p=p_value) 
+            noise_model = self.noise_model_class(p=p_value)
 
         qpu = QPU(qubits=compiled_circuit.qubits, noise_model=noise_model)
-         
-        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit).as_stim_circuit()
-
+        
+        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit)
+        dk_stim_circuit = noisy_circuit.as_stim_circuit()
+        
         pure_stim_circuit = stim.Circuit(str(dk_stim_circuit))
-         
-        detectors, observables = pure_stim_circuit.compile_detector_sampler().sample(shots=shots, separate_observables=True)
- 
+        
+        detectors, observables = pure_stim_circuit.compile_detector_sampler().sample(
+            shots=shots, separate_observables=True
+        )
 
         error_model = pure_stim_circuit.detector_error_model(decompose_errors=True)
         
@@ -116,31 +116,32 @@ class ThresholdEstimator:
             matching = pymatching.Matching.from_detector_error_model(error_model)
             predictions = matching.decode_batch(detectors)
         else:
-            raise NotImplementedError(f"Local decoding for {self.decoder.decoder_type} is not yet implemented in this pipeline.") 
+            raise NotImplementedError(f"Local decoding for {self.decoder.decoder_type} is not yet implemented in this pipeline.")
+
         logical_errors = int(np.sum(np.any(predictions != observables, axis=1)))
                 
         lep = float(logical_errors) / float(shots)
         return lep
-    
+
     def run_single_pair_search(self, d_low: int, d_high: int) -> float:
         """Performs a bisection search to find the threshold crossing for a code distance pair.
-        
+         
         Args:
             d_low: The lower code distance value.
             d_high: The higher code distance value.
-            
+             
         Returns:
             The estimated physical error rate at the threshold crossover point.
         """
         current_min = self.min_p
         current_max = self.max_p
         SAFETY: float = 0.8
-        
+         
         while (current_max - current_min) > self.precision:
             mid_p: float = (current_min + current_max) / 2.0
             current_shots: int = self.num_shots
             overlap: bool = True
-            
+             
             while overlap:
                 lep_low = self.run_simulation(mid_p, distance=d_low, shots=current_shots)
                 lep_high = self.run_simulation(mid_p, distance=d_high, shots=current_shots)                 
@@ -162,7 +163,7 @@ class ThresholdEstimator:
 
             self.history_data[d_low][mid_p] = lep_low
             self.history_data[d_high][mid_p] = lep_high
-           
+             
             if lep_low > lep_high:
                 current_min = mid_p
             elif lep_low < lep_high:
@@ -170,8 +171,6 @@ class ThresholdEstimator:
             elif lep_low == lep_high:
                 break         
 
-
-      
         return (current_min + current_max) / 2.0
 
     def run_parallel_searches(self, distance_pairs: list[tuple[int, int]]) -> dict:
@@ -209,4 +208,4 @@ class ThresholdEstimator:
              
             formatted_history[d] = (p_vals, lep_vals)
              
-        return formatted_history
+        return history
