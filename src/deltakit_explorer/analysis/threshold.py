@@ -64,7 +64,7 @@ class ThresholdEstimator:
         precision: float = 0.0001, 
         num_shots: int = 100_000,
         code_class = codes.RotatedPlanarCode,
-        noise_model_class = SI1000NoiseModel
+        noise_model_class = SI1000NoiseModel()
     ):
         """Initializes the ThresholdEstimator with target bounds and parameters."""
         self.min_p = min_p
