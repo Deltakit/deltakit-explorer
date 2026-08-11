@@ -1,4 +1,5 @@
 import math
+import pytest
 from deltakit_explorer.analysis.threshold import ThresholdEstimator, get_error_bar
 from deltakit_explorer.qpu import ToyNoise
 
@@ -11,19 +12,28 @@ def test_get_error_bar():
 def test_estimator_initialization():
     """Test that the estimator initializes correctly with default values."""
     estimator = ThresholdEstimator()
-    
+
     assert estimator.min_p == 0.001
     assert estimator.max_p == 0.05
     assert estimator.precision == 0.0001
     assert estimator.num_shots == 100_000
     assert estimator.history_data == {}
 
-def test_run_simulation():
+@pytest.mark.parametrize(
+    "p_value, distance",
+    [
+        (0.01, 3),
+        (0.05, 3),
+        (0.1, 3),
+        (0.05, 5),
+    ],
+)
+def test_run_simulation(p_value: float, distance: int):
     """Test the simulation worker using real execution with ToyNoise."""
     # Use ToyNoise so the QPU noise injection finds all required attributes
     estimator = ThresholdEstimator(num_shots=10, noise_model_class=ToyNoise)
     
-    lep = estimator.run_simulation(p_value=0.1, distance=3, shots=10)
+    lep = estimator.run_simulation(p_value=p_value, distance=distance, shots=10)
     
     assert isinstance(lep, float)
     assert 0.0 <= lep <= 1.0
@@ -32,7 +42,6 @@ def test_run_parallel_searches():
     """Test that multiple pairs are processed in parallel using live simulations."""
     estimator = ThresholdEstimator(num_shots=10, precision=0.05, noise_model_class=ToyNoise)
     pairs = [(3, 5)]
-
     results = estimator.run_parallel_searches(pairs)
     
     assert isinstance(results, dict)

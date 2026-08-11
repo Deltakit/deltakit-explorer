@@ -153,6 +153,9 @@ class ThresholdEstimator:
                  
                 if gap <= combined_error:
                     current_shots = math.ceil(current_shots * (combined_error / (SAFETY * gap)) ** 2) if gap > 0 else current_shots * 10
+                    # NEW SAFETY LIMIT TO PREVENT FREEZING:
+                    if current_shots > 15000:
+                        overlap = False
                 else:
                     overlap = False
                      
@@ -161,8 +164,8 @@ class ThresholdEstimator:
             if d_high not in self.history_data: 
                 self.history_data[d_high] = {}
 
-            self.history_data[d_low][mid_p] = lep_low
-            self.history_data[d_high][mid_p] = lep_high
+            self.history_data[d_low][mid_p] = (lep_low, current_shots)
+            self.history_data[d_high][mid_p] = (lep_high, current_shots)
              
             if lep_low > lep_high:
                 current_min = mid_p
@@ -197,15 +200,18 @@ class ThresholdEstimator:
         """Formats the saved simulation data into structured arrays for matplotlib visualization.
 
         Returns:
-            A dictionary mapping each code distance to a tuple of lists containing (p_vals, lep_vals).
+            A dictionary mapping each code distance to a 3-tuple of lists containing (p_vals, lep_vals, lep_errors).
         """
         formatted_history = {}
         for d, points_dict in self.history_data.items():
             sorted_points = sorted(points_dict.items())
              
             p_vals = [pt[0] for pt in sorted_points]
-            lep_vals = [pt[1] for pt in sorted_points]
+            lep_vals = [pt[1][0] for pt in sorted_points]
+            shots_vals = [pt[1][1] for pt in sorted_points]
+            
+            lep_errors = [get_error_bar(lep, shots) for lep, shots in zip(lep_vals, shots_vals)]
              
-            formatted_history[d] = (p_vals, lep_vals)
+            formatted_history[d] = (p_vals, lep_vals, lep_errors)
              
-        return history
+        return formatted_history
