@@ -62,7 +62,7 @@ class ThresholdEstimator:
         max_p: float = 0.05,
         precision: float = 0.0001,
         num_shots: int = 100_000,
-        code_class: type = codes.RotatedPlanarCode,
+        code: RotatedPlanarCode,
         noise_model_class: type = SI1000NoiseModel,
         decoder: Decoder | None = None,
     ):
