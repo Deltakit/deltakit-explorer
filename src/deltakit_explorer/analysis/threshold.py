@@ -15,6 +15,7 @@ import stim
 import numpy as np
 
 from deltakit_explorer.simulation import simulate_with_stim
+from deltakit_explorer.codes import RotatedPlanarCode
 from deltakit_explorer.enums import DecoderType
 from deltakit_explorer.types import (
     Decoder,
