@@ -62,7 +62,8 @@ class ThresholdEstimator:
         max_p: float = 0.05,
         precision: float = 0.0001,
         num_shots: int = 100_000,
-        code_class: type = codes.RotatedPlanarCode,
+        code_class=codes.RotatedPlanarCode,
+
         noise_model_class: type = SI1000NoiseModel,
         decoder: Decoder | None = None,
     ):
@@ -101,9 +102,7 @@ class ThresholdEstimator:
 
         qpu = QPU(qubits=compiled_circuit.qubits, noise_model=noise_model)
         
-        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit)
-        dk_stim_circuit = noisy_circuit.as_stim_circuit()
-        
+        noisy_circuit = qpu.compile_and_add_noise_to_circuit(compiled_circuit).as_stim_circuit()        
         pure_stim_circuit = stim.Circuit(str(dk_stim_circuit))
         
         detectors, observables = pure_stim_circuit.compile_detector_sampler().sample(
