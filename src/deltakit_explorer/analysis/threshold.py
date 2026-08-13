@@ -58,14 +58,13 @@ class ThresholdEstimator:
     """
     def __init__(
         self,
-        min_p: float = 0.001,
-        max_p: float = 0.05,
-        precision: float = 0.0001,
-        num_shots: int = 100_000,
-        code_class=codes.RotatedPlanarCode,
-        noise_model: SI1000NoiseModel,
-
-        decoder: Decoder | None = None,
+        min_p=0.001,
+        max_p=0.05,
+        precision=0.0001,
+        num_shots=100_000,
+        code_class=RotatedPlanarCode,
+        noise_model_class=SI1000NoiseModel,
+        decoder=None,
     ):
         """Initializes the ThresholdEstimator with target bounds and parameters."""
         self.min_p = min_p
