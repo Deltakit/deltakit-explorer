@@ -157,10 +157,7 @@ class StabiliserCode(ABC):
         )
 
     def check_redundancy_record_sets(
-        self,
-        circuit: Circuit,
-        logical_basis: PauliBasis,
-        num_rounds: int,
+        self, circuit: Circuit, logical_basis: PauliBasis, num_rounds: int
     ) -> tuple[frozenset[MeasurementRecord], ...]:
         """
         Return meta-check measurement-record sets for a memory circuit.
@@ -171,8 +168,7 @@ class StabiliserCode(ABC):
             num_rounds: Number of syndrome rounds in ``circuit``.
 
         Returns:
-            One record set per independent check redundancy on the
-            random-basis syndrome side.
+            One record set per independent check redundancy on the random-basis syndrome side.
         """
         from deltakit_explorer.codes._css._check_redundancies import (  # noqa: PLC0415
             check_redundancy_record_sets as _check_redundancy_record_sets,

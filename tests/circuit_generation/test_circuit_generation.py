@@ -1,6 +1,7 @@
 import deltakit_stim as stim
 import numpy as np
 import pytest
+from deltakit_circuit import Circuit, Detector
 from deltakit_circuit.gates import MX, PauliBasis
 
 from deltakit_explorer.codes._bivariate_bicycle_code import BivariateBicycleCode
@@ -30,19 +31,15 @@ from deltakit_explorer.codes._repetition_code import RepetitionCode
 from tests.helpers._gf2 import quotient_dimension_gf2
 
 
-def _count_detectors(circuit) -> int:
+def _count_detectors(circuit: Circuit) -> int:
     return len(circuit.detectors(include_nested=True))
 
 
-def _count_check_redundancy_detectors(circuit) -> int:
-    return sum(
-        1
-        for detector in circuit.detectors(include_nested=True)
-        if detector.tag == "check_redundancy"
-    )
+def _count_check_redundancy_detectors(circuit: Circuit) -> int:
+    return len(_meta_check_detectors(circuit))
 
 
-def _meta_check_detectors(circuit):
+def _meta_check_detectors(circuit: Circuit) -> list[Detector]:
     return [
         detector
         for detector in circuit.detectors(include_nested=True)

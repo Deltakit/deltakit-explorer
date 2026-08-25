@@ -111,7 +111,7 @@ def left_nullspace_basis(H: NDArray[np.uint8]) -> NDArray[np.uint8]:
     """
     Row basis of the left nullspace of ``H`` over GF(2).
 
-    Each returned row ``╬╗`` satisfies ``╬╗ @ H = 0 (mod 2)``.
+    Each returned row ``λ`` satisfies ``λ @ H = 0 (mod 2)``.
 
     Args:
         H: Parity-check matrix.
