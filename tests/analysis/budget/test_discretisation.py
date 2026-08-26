@@ -46,11 +46,11 @@ def test_logarithmic_points(
     assert np.all(np.logical_and(a <= ret + eps, ret <= b + eps))
     _assert_is_linear(np.log10(ret))
 
-
-@pytest.mark.parametrize(   
+@pytest.mark.parametrize(
     ("func", "abc"),
     list(
         itertools.product(
+
             [get_linear_points, get_logarithmic_points, get_c_optimal_points],
             [
                 (1.0, 2.0, 3.0),  # a < b < c
