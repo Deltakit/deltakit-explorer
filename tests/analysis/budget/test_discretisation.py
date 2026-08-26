@@ -47,32 +47,25 @@ def test_logarithmic_points(
     _assert_is_linear(np.log10(ret))
 
 
-@pytest.mark.parametrize(
+@pytest.mark.parametrize(   
     ("func", "abc"),
-    itertools.product(
-        [get_linear_points, get_logarithmic_points, get_c_optimal_points],
-        [
-            (1.0, 2.0, 3.0),  # a < b < c
-            (2.0, 1.0, 3.0),  # b < a < c
-            (3.0, 1.0, 2.0),  # b < c < a
-            (2.0, 3.0, 1.0),  # c < a < b
-            (3.0, 2.0, 1.0),  # c < b < a
-        ],
+    list(
+        itertools.product(
+            [get_linear_points, get_logarithmic_points, get_c_optimal_points],
+            [
+                (1.0, 2.0, 3.0),  # a < b < c
+                (2.0, 1.0, 3.0),  # b < a < c
+                (3.0, 1.0, 2.0),  # b < c < a
+                (2.0, 3.0, 1.0),  # c < a < b
+                (3.0, 2.0, 1.0),  # c < b < a
+            ],
+        )
     ),
 )
 def test_raises_on_invalid_inputs(
     func: GradientFitDiscretisationGenerator, abc: tuple[float, float, float]
 ) -> None:
-    """Invalid ``a < c < b`` orderings must raise. Float inputs are used
-    throughout so the error message formats ``c`` consistently across
-    generators: ``get_c_optimal_points`` coerces ``c`` to float before
-    validating, so integer triples would raise ``c=3.0`` and fail to match
-    the integer-derived pattern.
-
-    Args:
-        func: the discretisation generator under test.
-        abc: an ``(a, b, c)`` triple whose ordering violates ``a < c < b``.
-    """
+    """Invalid ``a < c < b`` orderings must raise."""
     a, b, c = abc
     with pytest.raises(ValueError, match=f"Expected {a=} < {c=} < {b=}"):
         func(a, b, c, 5, 3)
@@ -102,7 +95,6 @@ def test_c_optimal_points_shape_and_bounds(
     ret = get_c_optimal_points(a, b, c, num_points, degree)
     assert len(ret) == num_points
     assert np.all(np.logical_and(a <= ret, ret <= b))
-    # Must be sorted (part of the protocol contract)
     assert np.all(ret[:-1] <= ret[1:])
 
 
@@ -115,22 +107,11 @@ def test_c_optimal_raises_below_minimum_num_points() -> None:
     "bad_c", [np.array([7e-3]), np.array([[7e-3]]), np.array([6e-3, 8e-3])]
 )
 def test_c_optimal_rejects_non_scalar_c(bad_c: npt.NDArray[np.floating]) -> None:
-    """``c`` must be a scalar float. A non-scalar (e.g. a length-1 array)
-    silently corrupts the slope-variance objective via broadcasting in
-    ``_get_variance_of_gradient_estimation_at_point``, so it is rejected
-    loudly rather than coerced. Callers must pass a scalar (see
-    ``generate_sweep_parameters``, which flattens ``central_point`` first).
-
-    Args:
-        bad_c: a non-scalar ``c`` value that must be rejected.
-    """
     with pytest.raises(ValueError, match="c must be a scalar"):
         get_c_optimal_points(2e-3, 1e-2, bad_c, 10, 3)
 
 
 def test_c_optimal_is_deterministic() -> None:
-    """Fixed ``seed=0`` in ``differential_evolution`` -> identical results
-    across calls."""
     pts1 = get_c_optimal_points(2e-3, 1e-2, 7e-3, 10, 3)
     pts2 = get_c_optimal_points(2e-3, 1e-2, 7e-3, 10, 3)
     np.testing.assert_array_equal(pts1, pts2)
@@ -145,17 +126,8 @@ def test_c_optimal_is_deterministic() -> None:
     ],
 )
 def test_c_optimal_produces_wellconditioned_designs(a: float, b: float) -> None:
-    """The cond threshold should prevent the optimiser from picking rank-
-    deficient designs, even across orders of magnitude in x-scale.
-
-    Args:
-        a: lower bound of the interval.
-        b: upper bound of the interval.
-    """
     c = (a + b) / 2
     pts = get_c_optimal_points(a, b, c, 10, 3)
-    # Rescale to [-1, 1] (same as the objective does internally) and check
-    # the conditioning is comfortably below the threshold.
     u = 2 * (pts - pts.min()) / (pts.max() - pts.min()) - 1
     X = np.vander(u, 4, increasing=True)
     assert np.linalg.cond(X.T @ X) < 1e10
@@ -168,18 +140,6 @@ def test_c_optimal_produces_wellconditioned_designs(a: float, b: float) -> None:
 def test_c_optimal_minimal_design_has_enough_unique_points(
     num_points: int, degree: int
 ) -> None:
-    """At ``num_points == degree + 1`` every point must be distinct, or the
-    downstream fit is rank-deficient.
-
-    Regression test: the final index extraction used ``np.round`` while the
-    DE objective truncates with ``astype(int)``, so two indices DE scored as
-    distinct (e.g. 12.98 and 13.09) could both round to 13 — returning a
-    degenerate design whose objective is ``inf``.
-
-    Args:
-        num_points: number of design points, set to the minimum ``degree + 1``.
-        degree: polynomial degree of the downstream fit.
-    """
     pts = get_c_optimal_points(2e-3, 1e-2, 7e-3, num_points, degree)
     assert np.unique(pts).size >= degree + 1
 

@@ -10,13 +10,14 @@ import math
 import deltakit_stim  # type: ignore[import-untyped]
 import numpy as np
 import pymatching  # type: ignore[import-untyped]
-from deltakit_circuit.gates import RotatedPlanarCode
+from deltakit_explorer.codes import RotatedPlanarCode, css_code_memory_circuit
 
-from deltakit_explorer import DecoderType
-from deltakit_explorer.gates import PauliBasis
-from deltakit_explorer.qpu import QPU, css_code_memory_circuit
+from deltakit_circuit.gates import PauliBasis
+from deltakit_explorer.qpu import QPU
+from deltakit_explorer.enums import DecoderType
 from deltakit_explorer.types import (
     Decoder,
+    SI1000NoiseModel,
 )
 
 logger = logging.getLogger(__name__)

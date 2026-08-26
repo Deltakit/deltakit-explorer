@@ -23,7 +23,7 @@ def test_estimator_initialisation():
 
 
 @pytest.mark.parametrize(
-     ("p_value, distance"),
+     ("p_value", "distance"),
     [
         (0.01, 3),
         (0.05, 3),
