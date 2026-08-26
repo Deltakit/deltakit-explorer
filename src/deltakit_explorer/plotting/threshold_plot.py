@@ -1,6 +1,7 @@
 import logging
-import matplotlib
+import mpl
 import sys
+
 
 if sys.platform == "darwin":
     try:
@@ -15,6 +16,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
 def create_threshold_plot(
     data_dict: dict[int, tuple[list[float], list[float], list[float]]],
     estimated_threshold: float,
@@ -23,10 +25,8 @@ def create_threshold_plot(
     output_filename: str = "threshold_plot.png",
 ) -> str:
     """Generates a log-log threshold plot with an inset zoom and uncertainty bounds from simulation history data."""
-    
-    print(f"Using Matplotlib Backend: {matplotlib.get_backend()}")
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    _ fig, ax = plt.subplots(figsize=(12, 8))
 
     colors = {3: "#440154", 5: "#31688e", 7: "#35b779", 9: "#fde725"}
 
@@ -121,9 +121,8 @@ def create_threshold_plot(
     logger.info("Saved threshold plot to %s", output_filename)
 
     if "Agg" not in matplotlib.get_backend():
-        print("Opening the plot window now... (Close the window to end the script)")
         plt.show()
     else:
-        print(f"Running in headless mode. Plot successfully saved to {output_filename}")
+        logging.info(f"Running in headless mode. Plot successfully saved to {output_filename}")
 
     return output_filename

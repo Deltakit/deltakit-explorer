@@ -1,29 +1,23 @@
-# -*- coding: utf-8 -*-
-"""Threshold estimation module for quantum error correction codes.
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
 
-This module provides tools to estimate the fault-tolerant threshold of 
-quantum error correction codes using Monte Carlo simulations via Stim and PyMatching.
-"""
 
 from __future__ import annotations
 
-import math
-import logging
 import concurrent.futures
-import pymatching  # type: ignore[import-untyped]
-import stim        # type: ignore[import-untyped]
-import numpy as np
+import logging
+import math
 
-from deltakit_explorer.codes import RotatedPlanarCode
-from deltakit_explorer.enums import DecoderType
+import deltakit_stim  # type: ignore[import-untyped]
+import numpy as np
+import pymatching  # type: ignore[import-untyped]
+from deltakit_circuit.gates import RotatedPlanarCode
+
+from deltakit_explorer import DecoderType
+from deltakit_explorer.gates import PauliBasis
+from deltakit_explorer.qpu import QPU, css_code_memory_circuit
 from deltakit_explorer.types import (
     Decoder,
-    SI1000NoiseModel,
 )
-from deltakit_explorer import codes
-from deltakit_explorer.codes import css_code_memory_circuit
-from deltakit_circuit.gates import PauliBasis
-from deltakit_explorer.qpu import QPU, ToyNoise
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +39,7 @@ def get_error_bar(lep: float, num_shots: int) -> float:
 
 class ThresholdEstimator:
     """Estimates the quantum error correction threshold using bisection search.
-        
+
     Attributes:
         min_p: The lower bound of the physical error rate search range.
         max_p: The upper bound of the physical error rate search range.
@@ -56,6 +50,7 @@ class ThresholdEstimator:
         decoder: The decoding algorithm type used.
         history_data: Storage dictionary tracking simulation outcomes.
     """
+
     def __init__(
         self,
         min_p=0.001,
@@ -66,17 +61,19 @@ class ThresholdEstimator:
         noise_model_class=SI1000NoiseModel,
         decoder=None,
     ):
-        """Initializes the ThresholdEstimator with target bounds and parameters."""
+        """Initialises the ThresholdEstimator with target bounds and parameters."""
         self.min_p = min_p
         self.max_p = max_p
         self.precision = precision
         self.num_shots = num_shots
         self.code_class = code_class
         self.noise_model_class = noise_model_class
-        self.decoder = decoder if decoder is not None else Decoder(decoder_type=DecoderType.MWPM)
+        self.decoder = (
+            decoder if decoder is not None else Decoder(decoder_type=DecoderType.MWPM)
+        )
         self.history_data = {}
 
-    def run_simulation(self, p_value, distance, shots):
+    def run_simulation(self, p_value: float, distance: int, shots: int):
         """Executes a quantum memory circuit simulation under a specific physical error rate.
 
         Args:
@@ -104,32 +101,32 @@ class ThresholdEstimator:
             compiled_circuit
         ).as_stim_circuit()
 
-        pure_stim_circuit = stim.Circuit(str(noisy_circuit))
-        
+        pure_stim_circuit = deltakit_stim.Circuit(str(noisy_circuit))
+
         detectors, observables = pure_stim_circuit.compile_detector_sampler().sample(
             shots=shots, separate_observables=True
         )
 
         error_model = pure_stim_circuit.detector_error_model(decompose_errors=True)
-        
+
         if self.decoder.decoder_type == DecoderType.MWPM:
             matching = pymatching.Matching.from_detector_error_model(error_model)
             predictions = matching.decode_batch(detectors)
         else:
-            raise NotImplementedError(f"Local decoding for {self.decoder.decoder_type} is not yet implemented in this pipeline.")
+            msg = f"Local decoding for {self.decoder.decoder_type} is not yet implemented in this pipeline."
+            raise NotImplementedError(msg)
 
         logical_errors = int(np.sum(np.any(predictions != observables, axis=1)))
-                
-        lep = float(logical_errors) / float(shots)
-        return lep
 
-    def run_single_pair_search(self, d_low, d_high):
+        return float(logical_errors) / float(shots)
+
+    def run_single_pair_search(self, d_low: int, d_high: int) -> float:
         """Performs a bisection search to find the threshold crossing for a code distance pair.
-         
+
         Args:
             d_low: The lower code distance value.
             d_high: The higher code distance value.
-             
+
         Returns:
             The estimated physical error rate at the threshold crossover point.
         """
@@ -137,50 +134,62 @@ class ThresholdEstimator:
         current_max = self.max_p
         SAFETY = 0.8
         MAX_SHOTS = 1_000_000
- 
+
         while (current_max - current_min) > self.precision:
-            mid_p = (current_min + current_max) / 2.0
-            current_shots = self.num_shots
-            overlap = True
-             
+            mid_p: float = (current_min + current_max) / 2.0
+            current_shots: int = self.num_shots
+            overlap: bool = True
+
             while overlap:
-                lep_low = self.run_simulation(mid_p, distance=d_low, shots=current_shots)
-                lep_high = self.run_simulation(mid_p, distance=d_high, shots=current_shots)                
+                lep_low = self.run_simulation(
+                    mid_p, distance=d_low, shots=current_shots
+                )
+                lep_high = self.run_simulation(
+                    mid_p, distance=d_high, shots=current_shots
+                )
                 error_low = get_error_bar(lep_low, current_shots)
                 error_high = get_error_bar(lep_high, current_shots)
-                 
+
                 gap = abs(lep_low - lep_high)
                 combined_error = error_low + error_high
-                 
+
                 if gap <= combined_error:
-                    current_shots = math.ceil(current_shots * (combined_error / (SAFETY * gap)) ** 2) if gap > 0 else current_shots * 10
+                    current_shots = (
+                        math.ceil(
+                            current_shots * (combined_error / (SAFETY * gap)) ** 2
+                        )
+                        if gap > 0
+                        else current_shots * 10
+                    )
                     # NEW SAFETY LIMIT TO PREVENT FREEZING:
                     if current_shots > MAX_SHOTS:
-                        raise RuntimeError(
+                        msg = (
                             f"Could not obtain non-overlapping error bars "
                             f"for p={mid_p:.6g} within {MAX_SHOTS} shots."
                         )
+                        raise RuntimeError(msg)
+                        
                 else:
                     overlap = False
-                     
-            if d_low not in self.history_data: 
+
+            if d_low not in self.history_data:
                 self.history_data[d_low] = {}
-            if d_high not in self.history_data: 
+            if d_high not in self.history_data:
                 self.history_data[d_high] = {}
 
             self.history_data[d_low][mid_p] = (lep_low, current_shots)
             self.history_data[d_high][mid_p] = (lep_high, current_shots)
-             
+
             if lep_low > lep_high:
                 current_min = mid_p
             elif lep_low < lep_high:
                 current_max = mid_p
             elif lep_low == lep_high:
-                break        
+                break
 
         return (current_min + current_max) / 2.0
 
-    def run_parallel_searches(self, distance_pairs):
+    def run_parallel_searches(self, distance_pairs: list[tuple[int, int]]) -> dict:
         """Executes multiple bisection searches concurrently across different distance pairs.
 
         Args:
@@ -192,7 +201,10 @@ class ThresholdEstimator:
         results = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = {
-                executor.submit(self.run_single_pair_search, d_low, d_high): (d_low, d_high) 
+                executor.submit(self.run_single_pair_search, d_low, d_high): (
+                    d_low,
+                    d_high,
+                )
                 for d_low, d_high in distance_pairs
             }
             for future in concurrent.futures.as_completed(futures):
@@ -200,8 +212,8 @@ class ThresholdEstimator:
                 results[pair] = future.result()
         return results
 
-    def get_search_history(self):
-        """Formats the saved simulation data into structured arrays for matplotlib visualization.
+    def get_search_history(self) -> dict:
+        """Formats the saved simulation data into structured arrays for matplotlib visualisation.
 
         Returns:
             A dictionary mapping each code distance to a 3-tuple of lists containing (p_vals, lep_vals, lep_errors).
@@ -209,13 +221,15 @@ class ThresholdEstimator:
         formatted_history = {}
         for d, points_dict in self.history_data.items():
             sorted_points = sorted(points_dict.items())
-             
+
             p_vals = [pt[0] for pt in sorted_points]
             lep_vals = [pt[1][0] for pt in sorted_points]
             shots_vals = [pt[1][1] for pt in sorted_points]
-            
-            lep_errors = [get_error_bar(lep, shots) for lep, shots in zip(lep_vals, shots_vals)]
-             
+
+            lep_errors = [
+                get_error_bar(lep, shots) for lep, shots in zip(lep_vals, shots_vals)
+            ]
+
             formatted_history[d] = (p_vals, lep_vals, lep_errors)
-             
+
         return formatted_history
