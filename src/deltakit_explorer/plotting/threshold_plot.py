@@ -26,7 +26,7 @@ def create_threshold_plot(
 ) -> str:
     """Generates a log-log threshold plot with an inset zoom and uncertainty bounds from simulation history data."""
 
-    _ fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     colors = {3: "#440154", 5: "#31688e", 7: "#35b779", 9: "#fde725"}
 
