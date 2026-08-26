@@ -65,7 +65,12 @@ def test_logarithmic_points(
 def test_raises_on_invalid_inputs(
     func: GradientFitDiscretisationGenerator, abc: tuple[float, float, float]
 ) -> None:
-    """Invalid ``a < c < b`` orderings must raise."""
+    """Invalid ``a < c < b`` orderings must raise.
+ 
+    Args:
+        func (GradientFitDiscretisationGenerator): The discretisation generator instance.
+        abc (tuple[float, float, float]): The test parameters.
+    """
     a, b, c = abc
     with pytest.raises(ValueError, match=f"Expected {a=} < {c=} < {b=}"):
         func(a, b, c, 5, 3)

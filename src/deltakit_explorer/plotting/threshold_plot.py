@@ -1,6 +1,10 @@
+# (c) Copyright Riverlane 2020-2026. All rights reserved.
+
 import logging
-import mpl
 import sys
+
+import matplotlib
+import matplotlib.pyplot as plt
 
 
 if sys.platform == "darwin":
@@ -24,9 +28,20 @@ def create_threshold_plot(
     title: str = "Surface Code Threshold Crossing",
     output_filename: str = "threshold_plot.png",
 ) -> str:
-    """Generates a log-log threshold plot with an inset zoom and uncertainty bounds from simulation history data."""
+    """Generates a log-log threshold plot with an inset zoom and uncertainty bounds from simulation history data.
+   
+    Args:
+        data_dict (dict[int, tuple[list[float], list[float], list[float]]]): Dictionary mapping distances to simulation history.
+        estimated_threshold (float): The calculated asymptotic threshold value.
+        threshold_error (float): The statistical uncertainty of the threshold.
+        output_filename (str): The file path where the plot image will be saved.
+        title (str): The title displayed on the plot.
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    Returns:
+        str: The path to the saved output file.
+    """
+
+    _, ax = plt.subplots(figsize=(12, 8))
 
     colors = {3: "#440154", 5: "#31688e", 7: "#35b779", 9: "#fde725"}
 
@@ -123,6 +138,6 @@ def create_threshold_plot(
     if "Agg" not in matplotlib.get_backend():
         plt.show()
     else:
-        logging.info(f"Running in headless mode. Plot successfully saved to {output_filename}")
+        logging.info("Running in headless mode. Plot successfully saved to %s", output_filename)
 
     return output_filename

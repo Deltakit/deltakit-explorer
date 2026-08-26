@@ -10,6 +10,7 @@ import math
 import deltakit_stim  # type: ignore[import-untyped]
 import numpy as np
 import pymatching  # type: ignore[import-untyped]
+
 from deltakit_circuit.gates import PauliBasis
 from deltakit_explorer.codes import RotatedPlanarCode, css_code_memory_circuit
 from deltakit_explorer.enums import DecoderType
@@ -39,29 +40,27 @@ def get_error_bar(lep: float, num_shots: int) -> float:
 
 class ThresholdEstimator:
     """Estimates the quantum error correction threshold using bisection search.
-
-    Attributes:
-        min_p: The lower bound of the physical error rate search range.
-        max_p: The upper bound of the physical error rate search range.
-        precision: The target convergence precision for the bisection search.
-        num_shots: The number of Monte Carlo shots per simulation round.
-        code_class: The quantum code class being evaluated.
-        noise_model_class: The physical noise model class applied.
-        decoder: The decoding algorithm type used.
-        history_data: Storage dictionary tracking simulation outcomes.
+   
+     Args:
+        min_p: Minimum physical error probability to consider.
+        max_p: Maximum physical error probability to consider.
+        precision: Precision required for the threshold estimate.
+        num_shots: Number of shots used for each simulation.
+        code_class: Quantum error correction code class to use.
+        noise_model_class: Noise model class to use.
+        decoder: Decoder to use. If None, MWPM is used.
     """
-
+     
     def __init__(
         self,
-        min_p=0.001,
-        max_p=0.05,
-        precision=0.0001,
-        num_shots=100_000,
+        min_p: float = 0.001,
+        max_p: float = 0.05,
+        precision: float = 0.0001,
+        num_shots: int = 100_000,
         code_class=RotatedPlanarCode,
         noise_model_class=SI1000NoiseModel,
         decoder=None,
     ):
-        """Initialises the ThresholdEstimator with target bounds and parameters."""
         self.min_p = min_p
         self.max_p = max_p
         self.precision = precision
@@ -80,6 +79,9 @@ class ThresholdEstimator:
             p_value: The physical error probability.
             distance: The code distance (width and height) of the layout.
             shots: The number of Monte Carlo sampling shots to execute.
+       
+        Raises:
+            NotImplementedError: If the simulation is not yet implemented.
 
         Returns:
             The measured logical error probability (lep).
@@ -126,6 +128,9 @@ class ThresholdEstimator:
         Args:
             d_low: The lower code distance value.
             d_high: The higher code distance value.
+        
+        Raises:
+            NotImplementedError: If the simulation is not yet implemented.
 
         Returns:
             The estimated physical error rate at the threshold crossover point.
@@ -168,9 +173,10 @@ class ThresholdEstimator:
                             f"for p={mid_p:.6g} within {MAX_SHOTS} shots."
                         )
                         raise RuntimeError(msg)
-                    
-                    else:
-                        overlap = False
+
+                    overlap = False
+
+
 
             if d_low not in self.history_data:
                 self.history_data[d_low] = {}

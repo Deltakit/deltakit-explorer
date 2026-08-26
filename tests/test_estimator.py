@@ -1,6 +1,6 @@
 import math
 from unittest.mock import patch
-
+from typing import Any
 import pytest
 
 from deltakit_explorer.analysis.threshold import ThresholdEstimator, get_error_bar
@@ -35,8 +35,14 @@ def test_estimator_initialisation():
         (0.05, 5),
     ],
 )
-def test_run_simulation(mock_run_simulation, p_value: float, distance: int):
-    """Test the simulation worker using mocked execution to bypass stim C++ type errors."""
+def test_run_simulation(mock_run_simulation: Any, p_value: float, distance: int):
+    """Test the simulation worker using mocked execution to bypass stim C++ type errors.
+
+    Args:
+        mock_run_simulation (Any): The mock fixture for simulation execution.
+        p_value (float): The physical error probability.
+        distance (int): The code distance.
+    """
     # Tell the mock to pretend the simulation successfully returned a logical error probability of 0.042
     mock_run_simulation.return_value = 0.042
 
@@ -50,7 +56,11 @@ def test_run_simulation(mock_run_simulation, p_value: float, distance: int):
 
 @patch.object(ThresholdEstimator, "run_parallel_searches")
 def test_run_parallel_searches(mock_parallel):
-    """Test that multiple pairs are processed in parallel."""
+    """Test that multiple pairs are processed in parallel.
+
+    Args:
+        mock_parallel (Any): The mock fixture for parallel search execution.
+    """
     # Mock this as well to guarantee CI stability
     mock_parallel.return_value = {(3, 5): 0.015}
 
