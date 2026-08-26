@@ -54,7 +54,7 @@ def test_run_parallel_searches(mock_parallel):
     # Mock this as well to guarantee CI stability
     mock_parallel.return_value = {(3, 5): 0.015}
 
-        estimator = ThresholdEstimator(
+    estimator = ThresholdEstimator(
         num_shots=10, precision=0.05, noise_model_class=ToyNoise
     )
     pairs = [(3, 5)]
