@@ -23,3 +23,12 @@ class DrawingColours(Enum):
     Z_COLOUR = "#3ccbda"
     DATA_QUBIT_COLOUR = "#006f62"
     ANCILLA_QUBIT_COLOUR = "#ff7500"
+
+
+# Colours used for threshold crossing plots, mapped by code distance
+THRESHOLD_DISTANCE_COLORS = {
+    3: "#440154",
+    5: "#31688e",
+    7: "#35b779",
+    9: "#fde725",
+}

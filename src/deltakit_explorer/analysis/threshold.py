@@ -1,6 +1,5 @@
 # (c) Copyright Riverlane 2020-2026. All rights reserved.
 
-
 from __future__ import annotations
 
 import concurrent.futures
@@ -10,8 +9,9 @@ import math
 import deltakit_stim  # type: ignore[import-untyped]
 import numpy as np
 import pymatching  # type: ignore[import-untyped]
-
 from deltakit_circuit.gates import PauliBasis
+from scipy.optimize import curve_fit
+
 from deltakit_explorer.codes import RotatedPlanarCode, css_code_memory_circuit
 from deltakit_explorer.enums import DecoderType
 from deltakit_explorer.qpu import QPU
@@ -38,9 +38,22 @@ def get_error_bar(lep: float, num_shots: int) -> float:
     return math.sqrt((lep * (1.0 - lep)) / num_shots)
 
 
+def finite_size_scaling_drift(d: float, p_th: float, C: float, omega: float) -> float:
+    """The physical drift equation for finite-size scaling.
+
+    p_cross(d) = p_th + C * d^(-omega)
+
+    Reference:
+    Wang, C., Harrington, J., & Preskill, J. (2003).
+    "Confinement-Higgs transition in a disordered gauge theory and the accuracy threshold for quantum memory."
+    arXiv:quant-ph/0207088v2
+    """
+    return p_th + C * (d ** -omega)
+
+
 class ThresholdEstimator:
     """Estimates the quantum error correction threshold using bisection search.
-   
+
      Args:
         min_p: Minimum physical error probability to consider.
         max_p: Maximum physical error probability to consider.
@@ -50,7 +63,7 @@ class ThresholdEstimator:
         noise_model_class: Noise model class to use.
         decoder: Decoder to use. If None, MWPM is used.
     """
-     
+
     def __init__(
         self,
         min_p: float = 0.001,
@@ -79,7 +92,7 @@ class ThresholdEstimator:
             p_value: The physical error probability.
             distance: The code distance (width and height) of the layout.
             shots: The number of Monte Carlo sampling shots to execute.
-       
+
         Raises:
             NotImplementedError: If the simulation is not yet implemented.
 
@@ -128,7 +141,7 @@ class ThresholdEstimator:
         Args:
             d_low: The lower code distance value.
             d_high: The higher code distance value.
-        
+
         Raises:
             NotImplementedError: If the simulation is not yet implemented.
 
@@ -175,8 +188,6 @@ class ThresholdEstimator:
                         raise RuntimeError(msg)
 
                     overlap = False
-
-
 
             if d_low not in self.history_data:
                 self.history_data[d_low] = {}
@@ -239,3 +250,38 @@ class ThresholdEstimator:
             formatted_history[d] = (p_vals, lep_vals, lep_errors)
 
         return formatted_history
+
+    def estimate_asymptotic_threshold(self, distance_pairs: list[tuple[int, int]]) -> tuple[float, float, float, dict]:
+        """Runs parallel searches and fits the data to find the asymptotic threshold.
+
+        Args:
+            distance_pairs: A list of tuples containing lower and upper code distances.
+
+        Returns:
+            A tuple containing (p_th_final, p_th_error, omega_final, raw_results_dict).
+        """
+        results = self.run_parallel_searches(distance_pairs)
+
+        average_distances: list[float] = []
+        crossing_points: list[float] = []
+
+        for pair, p_cross in sorted(results.items()):
+            d_low, d_high = pair
+            average_distances.append((d_low + d_high) / 2.0)
+            crossing_points.append(p_cross)
+
+        # Initial guesses: [p_th, C, omega]
+        initial_guess = [0.01, 0.01, 1.0]
+
+        popt, pcov = curve_fit(
+            finite_size_scaling_drift,
+            np.array(average_distances),
+            np.array(crossing_points),
+            p0=initial_guess,
+            bounds=([0.0, -10.0, 0.1], [0.15, 10.0, 5.0])
+        )
+
+        p_th_final, _, omega_final = popt
+        p_th_error = float(np.sqrt(np.diag(pcov))[0])
+
+        return p_th_final, p_th_error, omega_final, results

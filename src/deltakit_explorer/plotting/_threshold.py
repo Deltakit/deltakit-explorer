@@ -1,49 +1,57 @@
 # (c) Copyright Riverlane 2020-2026. All rights reserved.
 
+from __future__ import annotations
+
 import logging
 import sys
 
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
+from deltakit_explorer.enums._basic_enums import THRESHOLD_DISTANCE_COLORS
 
 if sys.platform == "darwin":
     try:
-        matplotlib.use("MacOSX")
+        mpl.use("MacOSX")
     except Exception:
-        matplotlib.use("Agg")
+        mpl.use("Agg")
 else:
-    matplotlib.use("Agg")
-
-import matplotlib.pyplot as plt
-import numpy as np
+    mpl.use("Agg")
 
 logger = logging.getLogger(__name__)
 
 
-def create_threshold_plot(
+def plot_threshold(
     data_dict: dict[int, tuple[list[float], list[float], list[float]]],
     estimated_threshold: float,
     threshold_error: float = 0.0005,
-    title: str = "Surface Code Threshold Crossing",
-    output_filename: str = "threshold_plot.png",
-) -> str:
-    """Generates a log-log threshold plot with an inset zoom and uncertainty bounds from simulation history data.
-   
+    *,
+    fig: Figure | None = None,
+    ax: Axes | None = None,
+    title: str | None = None,
+) -> tuple[Figure, Axes]:
+    """Generates a log-log threshold plot with an inset zoom and uncertainty bounds.
+
     Args:
-        data_dict (dict[int, tuple[list[float], list[float], list[float]]]): Dictionary mapping distances to simulation history.
-        estimated_threshold (float): The calculated asymptotic threshold value.
-        threshold_error (float): The statistical uncertainty of the threshold.
-        output_filename (str): The file path where the plot image will be saved.
-        title (str): The title displayed on the plot.
+        data_dict: Dictionary mapping distances to (p_vals, lep_vals, lep_errors).
+        estimated_threshold: The calculated asymptotic threshold value.
+        threshold_error: The statistical uncertainty of the threshold.
+        fig: A matplotlib Figure object to plot on. If None, a new figure will be created.
+        ax: A matplotlib Axes object to plot on. If None, a new axes will be created.
+        title: An optional custom title for the plot. If None, a default title is used.
 
     Returns:
-        str: The path to the saved output file.
+        The matplotlib Figure and Axes objects containing the plot.
     """
 
-    _, ax = plt.subplots(figsize=(12, 8))
+    if fig is None or ax is None:
+        fig, ax = plt.subplots(figsize=(12, 8))
 
-    colors = {3: "#440154", 5: "#31688e", 7: "#35b779", 9: "#fde725"}
+    if title is None:
+        title = "Surface Code Threshold Crossing"
 
     # --- Main Plot ---
     for distance, data_tuple in sorted(data_dict.items()):
@@ -51,7 +59,7 @@ def create_threshold_plot(
         lep_vals = data_tuple[1]
         lep_errors = data_tuple[2] if len(data_tuple) > 2 else np.zeros_like(p_vals)
 
-        color = colors.get(distance, "black")
+        color = THRESHOLD_DISTANCE_COLORS.get(distance, "black")
         ax.errorbar(
             p_vals,
             lep_vals,
@@ -80,7 +88,7 @@ def create_threshold_plot(
         lep_vals = data_tuple[1]
         lep_errors = data_tuple[2] if len(data_tuple) > 2 else np.zeros_like(p_vals)
 
-        color = colors.get(distance, "black")
+        color = THRESHOLD_DISTANCE_COLORS.get(distance, "black")
         ax_ins.errorbar(
             p_vals,
             lep_vals,
@@ -131,13 +139,6 @@ def create_threshold_plot(
     ax_ins.legend(loc="upper right", frameon=True, facecolor="white", fontsize=9)
     ax.indicate_inset_zoom(ax_ins, edgecolor="gray")
 
-    plt.tight_layout()
-    plt.savefig(output_filename, dpi=300, bbox_inches="tight")
-    logger.info("Saved threshold plot to %s", output_filename)
+    fig.tight_layout()
 
-    if "Agg" not in matplotlib.get_backend():
-        plt.show()
-    else:
-        logging.info("Running in headless mode. Plot successfully saved to %s", output_filename)
-
-    return output_filename
+    return fig, ax
