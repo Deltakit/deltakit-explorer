@@ -84,7 +84,7 @@ def get_error_budget(
     """Compute the error budget of the provided ``noise_model``.
 
     Note:
-        Statistical bound search and pilot sampling are not implemented yet, so
+        The pilot simulation adapter is not connected yet, so
         automatic mode currently raises BoundsDiscoveryError with an unresolved
         result. Explicit-bound budgeting remains available.
 
