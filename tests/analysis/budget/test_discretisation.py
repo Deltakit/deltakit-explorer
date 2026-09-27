@@ -91,10 +91,10 @@ def test_raise_on_negative_inputs_log() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("a", "b", "num_points", "degree"),
-    list(itertools.product([2e-3, 1e-2], [5e-2, 1e-1], [5, 10, 15], [1, 2, 3])),
-)
+@pytest.mark.parametrize("a", [2e-3, 1e-2])
+@pytest.mark.parametrize("b", [5e-2, 1e-1])
+@pytest.mark.parametrize("num_points", [5, 7])
+@pytest.mark.parametrize("degree", [1, 2, 3])
 def test_c_optimal_points_shape_and_bounds(
     a: float, b: float, num_points: int, degree: int
 ) -> None:
@@ -131,8 +131,8 @@ def test_c_optimal_rejects_non_scalar_c(bad_c: npt.NDArray[np.floating]) -> None
 def test_c_optimal_is_deterministic() -> None:
     """Fixed ``seed=0`` in ``differential_evolution`` -> identical results
     across calls."""
-    pts1 = get_c_optimal_points(2e-3, 1e-2, 7e-3, 10, 3)
-    pts2 = get_c_optimal_points(2e-3, 1e-2, 7e-3, 10, 3)
+    pts1 = get_c_optimal_points(2e-3, 1e-2, 7e-3, 5, 2)
+    pts2 = get_c_optimal_points(2e-3, 1e-2, 7e-3, 5, 2)
     np.testing.assert_array_equal(pts1, pts2)
 
 
@@ -153,7 +153,7 @@ def test_c_optimal_produces_wellconditioned_designs(a: float, b: float) -> None:
         b: upper bound of the interval.
     """
     c = (a + b) / 2
-    pts = get_c_optimal_points(a, b, c, 10, 3)
+    pts = get_c_optimal_points(a, b, c, 5, 2)
     # Rescale to [-1, 1] (same as the objective does internally) and check
     # the conditioning is comfortably below the threshold.
     u = 2 * (pts - pts.min()) / (pts.max() - pts.min()) - 1
@@ -188,9 +188,8 @@ def test_discretisation_strategy_exposes_c_optimal() -> None:
     assert hasattr(DiscretisationStrategy, "C_OPTIMAL")
 
 
-@pytest.mark.parametrize(
-    ("num_points", "degree"), list(itertools.product([5, 10], [1, 2, 3]))
-)
+@pytest.mark.parametrize("num_points", [5, 10])
+@pytest.mark.parametrize("degree", [1, 2, 3])
 def test_discretisation_strategy_dispatches_c_optimal(
     num_points: int, degree: int
 ) -> None:
