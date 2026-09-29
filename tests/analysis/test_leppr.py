@@ -247,7 +247,9 @@ class TestCalculateLepScalarInputs:
             fails=3778, shots=np.array([100000])
         )
         assert isinstance(lep, np.ndarray)
+        assert isinstance(lep_stddev, np.ndarray)
         assert lep.shape == (1,)
+        assert lep_stddev.shape == (1,)
         np.testing.assert_allclose(lep, [0.03778])
 
     def test_scalar_with_longer_array_raises(self) -> None:
