@@ -171,8 +171,9 @@ def generate_sweep_parameters(
         that contains as rows variations of ``central_point`` where a single parameter has been
         changed each time.
 
-    Raises:
-        ValueError: If an axis has fewer than degree + 1 distinct design points.
+    Note:
+        Each axis must have at least degree + 1 distinct design points; the
+        design validator raises ValueError otherwise.
     """
     # Getting the points on which we will estimate 1 / Λ into ``noise_parameters``.
     # This is performing a sweeping for each parameter individually.
@@ -194,7 +195,18 @@ def _axis_fit_columns(
     sweep: npt.NDArray[np.floating],
     fitting_parameters: FittingParameters,
 ) -> list[npt.NDArray[np.int_]]:
-    """Select each pooled point once per axis and check polynomial support."""
+    """Select each pooled point once per axis and check polynomial support.
+
+    Args:
+        sweep: Noise vectors stored as columns, starting with the center.
+        fitting_parameters: Number of design points per axis and polynomial degree.
+
+    Returns:
+        Column indices selecting distinct coordinates for each axis fit.
+
+    Raises:
+        ValueError: If an axis has fewer than degree + 1 distinct design points.
+    """
     axes = []
     for axis in range(sweep.shape[0]):
         start = 1 + fitting_parameters.num_points_per_parameters * axis

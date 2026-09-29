@@ -31,7 +31,19 @@ from deltakit_explorer.analysis.error_budget._parameters import (
 
 
 class BoundSearchStatus(Enum):
-    """Termination status of one parameter's bound search."""
+    """Termination status of one parameter's bound search.
+
+    Attributes:
+        NOT_EVALUATED: No pilot evaluation has been performed.
+        CONVERGED: Feasible endpoints meet the sensitivity threshold.
+        INSUFFICIENT_COUNTS: A required circuit has too few failures.
+        LOW_SNR: Endpoint sensitivity is insufficient.
+        SATURATED: An LEP upper bound reaches the configured ceiling.
+        DOMAIN_LIMIT: No further probe fits the domain or numerical bracket.
+        TRIAL_LIMIT: The configured probe allowance is exhausted.
+        INVALID_ESTIMATE: A required statistical estimate is unusable.
+        NON_MONOTONE: Observed LEP decreases contradict increasing noise strength.
+    """
 
     NOT_EVALUATED = auto()
     CONVERGED = auto()
@@ -198,24 +210,30 @@ class BoundsSearchResult:
 class BoundsDiscoveryError(RuntimeError):
     """Discovery failure retaining its partial result for inspection.
 
+    Args:
+        message: Explanation of the failure.
+        result: Partial result, if discovery produced one.
+
     Attributes:
         result: Partial discovery result, when one was produced.
     """
 
-    def __init__(self, message: str, result: BoundsSearchResult | None = None) -> None:
-        """Create an error with the discovery evidence available at failure.
+    result: BoundsSearchResult | None
 
-        Args:
-            message: Explanation of the failure.
-            result: Partial result, if discovery produced one.
-        """
+    def __init__(self, message: str, result: BoundsSearchResult | None = None) -> None:
         super().__init__(message)
         self.result = result
 
 
 @dataclass(frozen=True)
 class _PilotBatch:
-    """Evaluator output: one observation per requested ID and its raw report."""
+    """Evaluator output: one observation per requested ID and its raw report.
+
+    Attributes:
+        observations: Statistical evidence for each requested point.
+        pilot_data: Raw sampler report rows.
+        phase_timings: Time spent constructing, sampling, and fitting this batch.
+    """
 
     observations: tuple[LambdaPilotObservation, ...]
     pilot_data: pd.DataFrame = field(default_factory=pd.DataFrame)
@@ -232,6 +250,12 @@ def _make_pilot_evaluator(**_configuration: object) -> _PilotEvaluator:
     sample every configured circuit exactly shots_per_trial times, retain all
     raw rows, and return per-distance rates and Lambda estimates when available.
     Return order is irrelevant; exceptions propagate to the caller.
+
+    Args:
+        **_configuration: Keyword arguments forwarded to the pilot sampler.
+
+    Returns:
+        A callable that samples and fits requested noise vectors.
     """
     # The adapter consumes the result types above; defer its import to avoid a cycle.
     from deltakit_explorer.analysis.error_budget._pilot import (  # noqa: PLC0415
@@ -244,7 +268,17 @@ def _make_pilot_evaluator(**_configuration: object) -> _PilotEvaluator:
 def _validate_experiments(
     rounds_by_distance: Mapping[int, Sequence[int]],
 ) -> tuple[str, ...]:
-    """Validate estimator support and report the existing zero-SPAM assumption."""
+    """Validate estimator support and report the existing zero-SPAM assumption.
+
+    Args:
+        rounds_by_distance: Required round counts for each code distance.
+
+    Returns:
+        Warnings for distances with only one round count.
+
+    Raises:
+        ValueError: If distances or round counts cannot support estimation.
+    """
     if len(rounds_by_distance) < 2:
         msg = "Bound search requires at least two distinct code distances."
         raise ValueError(msg)
@@ -286,7 +320,17 @@ def _screen_pilot_observation(
     search: BoundSearchParameters,
     estimator_warnings: tuple[str, ...],
 ) -> tuple[LambdaPilotObservation, BoundSearchStatus, str]:
-    """Screen all required circuits and estimates, retaining failed evidence."""
+    """Screen all required circuits and estimates, retaining failed evidence.
+
+    Args:
+        observation: Raw counts and fitted estimates at one point.
+        rounds_by_distance: Required round counts for each code distance.
+        search: Feasibility thresholds.
+        estimator_warnings: Warnings shared by all points in this search.
+
+    Returns:
+        The annotated observation, screening status, and explanation.
+    """
     required = {(d, r) for d, rounds in rounds_by_distance.items() for r in rounds}
     seen = [(c.distance, c.num_rounds) for c in observation.circuits]
     status = BoundSearchStatus.CONVERGED
@@ -381,7 +425,18 @@ def _next_probe(
     factor: float,
     logarithmic_lower: bool,
 ) -> float | None:
-    """Bisect a known bracket or expand from the outermost feasible point."""
+    """Bisect a known bracket or expand from the outermost feasible point.
+
+    Args:
+        side: Current probe and known feasible and infeasible limits.
+        center: Gradient evaluation coordinate.
+        limit: Parameter domain boundary on this side.
+        factor: Multiplicative interval expansion factor.
+        logarithmic_lower: Whether the lower probe must stay positive.
+
+    Returns:
+        The next coordinate, or None when no further probe is representable.
+    """
     if side.infeasible is not None:
         proposal = side.feasible / 2 + side.infeasible / 2
     else:
@@ -404,7 +459,14 @@ def _next_probe(
 
 
 def _monotonicity_contradiction(observations: Sequence[LambdaPilotObservation]) -> bool:
-    """Detect decreases supported by disjoint binomial LEP intervals."""
+    """Detect decreases supported by disjoint binomial LEP intervals.
+
+    Args:
+        observations: Screened evidence at the sampled coordinates.
+
+    Returns:
+        Whether any circuit contradicts increasing error strength.
+    """
     ordered = sorted(observations, key=lambda o: o.noise_parameters[0])
     for left_index, left in enumerate(ordered):
         intervals = {(c.distance, c.num_rounds): c.lep_interval for c in left.circuits}
@@ -440,7 +502,23 @@ def _run_bound_search(
     estimator_warnings: tuple[str, ...],
     started: float,
 ) -> BoundsSearchResult:
-    """Search one parameter against a batch evaluator, without simulation."""
+    """Search one parameter against a batch evaluator, without simulation.
+
+    Args:
+        center_value: Gradient evaluation coordinate.
+        initial_interval: Starting lower and upper probe coordinates.
+        rounds_by_distance: Required round counts for each code distance.
+        search: Domain, feasibility thresholds, and probe allowance.
+        scale: Calibration multiplier used to obtain the center.
+        shots_per_trial: Required shots for each circuit at each probe.
+        logarithmic: Whether the interval must remain strictly positive.
+        evaluate: Callable supplying pilot observations for requested points.
+        estimator_warnings: Warnings shared by all points in this search.
+        started: Start time from perf_counter for total elapsed time.
+
+    Returns:
+        Validated bounds or an unresolved result with retained pilot evidence.
+    """
     center = (center_value,)
     registry: dict[tuple[float, ...], int] = {}
     cache: dict[
@@ -639,7 +717,16 @@ def _apply_scalar_noise(
     circuit: Circuit,
     vector: Sequence[float],
 ) -> Circuit:
-    """Adapt a scalar noise model to the pilot sampler's vector interface."""
+    """Adapt a scalar noise model to the pilot sampler's vector interface.
+
+    Args:
+        noise_model: Callable accepting one scalar noise parameter.
+        circuit: Noiseless circuit to annotate.
+        vector: A vector containing exactly one noise coordinate.
+
+    Returns:
+        The circuit returned by the scalar noise model.
+    """
     return noise_model(circuit, float(vector[0]))
 
 
@@ -663,6 +750,11 @@ def find_error_budget_bounds(
     The state machine consumes a fixed-shot batch evaluator independently of
     simulation. Pilot observations and noiseless circuits are cached within this
     call; production budgeting performs fresh sampling.
+
+    The parameter must represent increasing error strength: increasing it must
+    not decrease the logical-error probability of any configured circuit.
+    Statistically supported decreases terminate the search as NON_MONOTONE.
+    Parameters such as coherence times must first be converted to error strengths.
 
     Args:
         noise_model: Callable adding noise to a circuit using the supplied scalar parameter.

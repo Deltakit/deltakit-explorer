@@ -22,13 +22,28 @@ from deltakit_explorer.analysis.error_budget._memory import (
 
 
 def _point_ids(xi: npt.NDArray[np.floating]) -> list[int]:
-    """Assign stable IDs to exact vectors, sharing IDs for replicated points."""
+    """Assign stable IDs to exact vectors, sharing IDs for replicated points.
+
+    Args:
+        xi: Noise vectors stored as columns.
+
+    Returns:
+        One exact-vector ID per column, in input order.
+    """
     registry: dict[tuple[float, ...], int] = {}
     return [registry.setdefault(tuple(vector), len(registry)) for vector in xi.T]
 
 
 def _seed_stream(seed: int | None, stream: int) -> np.random.SeedSequence | None:
-    """Separate pilot (0) and production (1) streams without consuming either."""
+    """Separate pilot (0) and production (1) streams without consuming either.
+
+    Args:
+        seed: Optional root seed.
+        stream: Independent stream identifier.
+
+    Returns:
+        A seed sequence for the requested stream, or None for unseeded sampling.
+    """
     return None if seed is None else np.random.SeedSequence(seed, spawn_key=(stream,))
 
 

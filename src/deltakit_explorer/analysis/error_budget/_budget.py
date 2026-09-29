@@ -75,7 +75,18 @@ def _vary_noise_parameter(
     circuit: Circuit,
     value: float,
 ) -> Circuit:
-    """Vary one noise coordinate while preserving the other evaluation values."""
+    """Vary one noise coordinate while preserving the other evaluation values.
+
+    Args:
+        noise_model: Callable accepting the full noise vector.
+        point: Fixed gradient evaluation vector.
+        index: Coordinate to vary.
+        circuit: Noiseless circuit to annotate.
+        value: Replacement noise coordinate.
+
+    Returns:
+        The circuit returned by the noise model.
+    """
     vector = point.copy()
     vector[index] = value
     return noise_model(circuit, vector)
@@ -112,7 +123,8 @@ def get_error_budget(
             ultimately get 1 / Λ.
         noise_parameters_exploration_bounds: ``(min, max)`` bounds for each noise
             parameter, or ``None`` to discover each parameter separately while holding the others
-            at their evaluation values. Explicit bounds bypass
+            at their evaluation values. Automatic discovery requires each parameter
+            to represent increasing error strength. Explicit bounds bypass
             discovery. A degree
             ``fitting_degree`` polynomial will be fitted on the interval ``[min, max]``.
             The corresponding scaled evaluation coordinate should
@@ -141,8 +153,8 @@ def get_error_budget(
         bound_search_shots_per_trial: pilot shots per distance/round circuit at each
             probed vector, forwarded to discovery separately from production shots.
         enable_correlations: use correlated matching for pilot and production decoding.
-        seed: optional root seed. Pilot and production use separate streams and
-            distinct task seeds. Reproducibility requires fixed backend, version,
+        seed: optional root seed. Each parameter search receives its own pilot
+            seed, separate from production. Reproducibility requires fixed backend, version,
             batching, and worker configuration.
 
     Returns:
@@ -167,6 +179,16 @@ def get_error_budget(
         results = []
         observations = []
         reports = []
+        pilot_seeds = (
+            [None] * len(parameters)
+            if seed is None
+            else [
+                int(child.generate_state(1, dtype=np.uint64)[0])
+                for child in np.random.SeedSequence(seed, spawn_key=(0,)).spawn(
+                    len(parameters)
+                )
+            ]
+        )
         for index, parameter in enumerate(parameters):
             result = find_error_budget_bounds(
                 partial(_vary_noise_parameter, noise_model, point, index),
@@ -184,7 +206,7 @@ def get_error_budget(
                 sampling_parameters=sampling_parameters,
                 memory_generator=memory_generator,
                 enable_correlations=enable_correlations,
-                seed=seed,
+                seed=pilot_seeds[index],
             )
             results.append(result)
             offset = len(observations)

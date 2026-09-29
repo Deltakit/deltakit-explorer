@@ -48,7 +48,21 @@ def _observe_point(
     rounds_by_distance: Mapping[int, Sequence[int]],
     search: BoundSearchParameters,
 ) -> LambdaPilotObservation:
-    """Fit a point without omitting any required circuit or distance."""
+    """Fit a point without omitting any required circuit or distance.
+
+    Args:
+        point_id: Stable ID of the sampled point.
+        vector: Exact noise vector used for sampling.
+        data: Raw report rows for this point.
+        rounds_by_distance: Required round counts for each code distance.
+        search: Failure-count and LEP thresholds for fitting.
+
+    Returns:
+        Raw counts and available estimates, including any fitting warnings.
+
+    Raises:
+        RuntimeError: If fitting raises an unexpected programming error.
+    """
     counts = data.groupby(["distance", "num_rounds"])[["fails", "shots"]].sum()
     circuits = tuple(
         CircuitPilotObservation(
@@ -129,7 +143,18 @@ def _observe_point(
 
 
 class _PilotSampler:
-    """A discovery-call-local batch evaluator with cached noiseless circuits."""
+    """A discovery-call-local batch evaluator with cached noiseless circuits.
+
+    Args:
+        noise_model: Callable adding noise for the supplied vector.
+        num_rounds_by_distances: Required round counts for each code distance.
+        shots_per_trial: Fixed shot count per circuit at each sampled point.
+        sampling_parameters: Batch size and worker configuration.
+        memory_generator: Callable or mapping supplying noiseless circuits.
+        enable_correlations: Whether to use correlated matching.
+        seed: Optional root seed for this search's pilot stream.
+        search_parameters: Failure-count and LEP thresholds for fitting.
+    """
 
     def __init__(
         self,

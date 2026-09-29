@@ -21,6 +21,11 @@ class _CorrelatedMatchingDecoder:
 
     Only the logical-flip interface consumed by StimDecoderManager is needed.
     The matcher is rebuilt from DEM text after worker-process serialization.
+
+    Args:
+        dem_text: Complete decomposed detector error model as text.
+        num_detectors: Number of syndrome bits expected by the matcher.
+        num_observables: Number of logical observables to decode.
     """
 
     def __init__(self, dem_text: str, num_detectors: int, num_observables: int) -> None:
