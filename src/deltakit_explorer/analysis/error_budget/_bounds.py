@@ -5,11 +5,11 @@ import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from enum import Enum, auto
-from numbers import Integral
+from functools import partial
+from numbers import Integral, Real
 from time import perf_counter
 
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 from deltakit_circuit._circuit import Circuit
 
@@ -147,8 +147,8 @@ class BoundsSearchResult:
         gradient_evaluation_scale: Multiplier used to resolve the evaluation point.
         diagnostics: Per-parameter search outcomes in coordinate order.
         pilot_data: Raw sampler report rows, including failed probes.
-        observations: One observation per unique sampled noise vector. Repeated
-            cached lookups do not add observations or contribute to totals.
+        observations: One observation per sampled point in each parameter search.
+            Cached lookups within a search do not contribute to totals.
         phase_timings: Measured phase and total discovery durations.
 
     Raises:
@@ -184,7 +184,7 @@ class BoundsSearchResult:
 
     @property
     def total_trials(self) -> int:
-        """Actual unique sampled vectors, including the center and failed probes."""
+        """Actual sampled points, including centers and failed probes."""
         return len(self.observations)
 
     @property
@@ -225,15 +225,20 @@ class _PilotBatch:
 _PilotEvaluator = Callable[[Mapping[int, tuple[float, ...]]], _PilotBatch]
 
 
-def _make_pilot_evaluator(**_configuration: object) -> _PilotEvaluator | None:
-    """Simulation adapter seam; return None until circuit sampling is connected.
+def _make_pilot_evaluator(**_configuration: object) -> _PilotEvaluator:
+    """Create the simulation adapter independently of the search state machine.
 
     Evaluators receive stable point IDs mapped to exact noise vectors. They must
     sample every configured circuit exactly shots_per_trial times, retain all
     raw rows, and return per-distance rates and Lambda estimates when available.
     Return order is irrelevant; exceptions propagate to the caller.
     """
-    return None
+    # The adapter consumes the result types above; defer its import to avoid a cycle.
+    from deltakit_explorer.analysis.error_budget._pilot import (  # noqa: PLC0415
+        _PilotSampler,
+    )
+
+    return _PilotSampler(**_configuration)
 
 
 def _validate_experiments(
@@ -398,11 +403,9 @@ def _next_probe(
     return float(proposal)
 
 
-def _monotonicity_contradiction(
-    observations: Sequence[LambdaPilotObservation], axis: int
-) -> bool:
+def _monotonicity_contradiction(observations: Sequence[LambdaPilotObservation]) -> bool:
     """Detect decreases supported by disjoint binomial LEP intervals."""
-    ordered = sorted(observations, key=lambda o: o.noise_parameters[axis])
+    ordered = sorted(observations, key=lambda o: o.noise_parameters[0])
     for left_index, left in enumerate(ordered):
         intervals = {(c.distance, c.num_rounds): c.lep_interval for c in left.circuits}
         for right in ordered[left_index + 1 :]:
@@ -426,8 +429,8 @@ class _AxisSearch:
 
 
 def _run_bound_search(
-    centers: npt.NDArray[np.floating],
-    initial_intervals: Sequence[tuple[float, float]],
+    center_value: float,
+    initial_interval: tuple[float, float],
     rounds_by_distance: Mapping[int, Sequence[int]],
     search: BoundSearchParameters,
     scale: float,
@@ -437,8 +440,8 @@ def _run_bound_search(
     estimator_warnings: tuple[str, ...],
     started: float,
 ) -> BoundsSearchResult:
-    """Run deterministic axis searches against a batch evaluator, without simulation."""
-    center = tuple(map(float, centers))
+    """Search one parameter against a batch evaluator, without simulation."""
+    center = (center_value,)
     registry: dict[tuple[float, ...], int] = {}
     cache: dict[
         tuple[float, ...], tuple[LambdaPilotObservation, BoundSearchStatus, str]
@@ -446,8 +449,8 @@ def _run_bound_search(
     reports = []
     construction_seconds = sampling_seconds = post_processing_seconds = 0.0
 
-    def point(axis: int, value: float) -> tuple[float, ...]:
-        return (*center[:axis], float(value), *center[axis + 1 :])
+    def point(value: float) -> tuple[float, ...]:
+        return (float(value),)
 
     def sample(vectors: Sequence[tuple[float, ...]]) -> None:
         nonlocal construction_seconds, sampling_seconds, post_processing_seconds
@@ -486,34 +489,29 @@ def _run_bound_search(
 
     sample([center])
     center_observation, center_status, center_reason = cache[center]
-    axes = [
-        _AxisSearch(
-            _SearchSide(lo, c), _SearchSide(hi, c), history=[center_observation]
-        )
-        for c, (lo, hi) in zip(center, initial_intervals, strict=True)
-    ]
+    axis = _AxisSearch(
+        _SearchSide(initial_interval[0], center_value),
+        _SearchSide(initial_interval[1], center_value),
+        history=[center_observation],
+    )
     if center_status is not BoundSearchStatus.CONVERGED:
-        for axis in axes:
-            axis.status = center_status
-            axis.reason = f"Shared center: {center_reason} Increase pilot shots or revise the experiments."
+        axis.status = center_status
+        axis.reason = (
+            f"Center: {center_reason} Increase pilot shots or revise the experiments."
+        )
 
-    while any(axis.status is None for axis in axes):
+    while axis.status is None:
         proposals = []
-        for i, axis in enumerate(axes):
-            if axis.status is not None:
-                continue
-            for side in (axis.lower, axis.upper):
-                vector = point(i, side.value)
-                if vector not in registry and axis.trials < search.max_trials_per_param:
-                    proposals.append(vector)
-                    axis.trials += 1
+        for side in (axis.lower, axis.upper):
+            vector = point(side.value)
+            if vector not in registry and axis.trials < search.max_trials_per_param:
+                proposals.append(vector)
+                axis.trials += 1
         sample(proposals)
         processing_started = perf_counter()
-        for i, axis in enumerate(axes):
-            if axis.status is not None:
-                continue
+        try:
             records = [
-                cache.get(point(i, side.value)) for side in (axis.lower, axis.upper)
+                cache.get(point(side.value)) for side in (axis.lower, axis.upper)
             ]
             for side, record in zip((axis.lower, axis.upper), records, strict=True):
                 if record is None:
@@ -529,13 +527,13 @@ def _run_bound_search(
                     side.infeasible = side.value
             if axis.status is not None:
                 continue
-            if _monotonicity_contradiction(axis.history, i):
+            if _monotonicity_contradiction(axis.history):
                 axis.status = BoundSearchStatus.NON_MONOTONE
                 axis.reason = "Ordered probes contradict monotone error strength: disjoint binomial LEP intervals."
                 continue
-            if axis.lower.feasible < center[i] < axis.upper.feasible:
-                lo = cache[point(i, axis.lower.feasible)][0]
-                hi = cache[point(i, axis.upper.feasible)][0]
+            if axis.lower.feasible < center_value < axis.upper.feasible:
+                lo = cache[point(axis.lower.feasible)][0]
+                hi = cache[point(axis.upper.feasible)][0]
                 axis.snr = float(
                     abs(hi.inverse_lambda_estimate - lo.inverse_lambda_estimate)
                     / np.hypot(hi.inverse_lambda_stddev, lo.inverse_lambda_stddev)
@@ -567,17 +565,17 @@ def _run_bound_search(
                 axis.status = BoundSearchStatus.TRIAL_LIMIT
                 axis.reason = "Probe allowance exhausted. " + axis.reason
                 continue
-            domain = search.parameter_domains[i]
+            domain = search.parameter_domains[0]
             next_values = [
                 _next_probe(
                     axis.lower,
-                    center[i],
+                    center_value,
                     domain[0],
                     search.expansion_factor,
                     logarithmic,
                 ),
                 _next_probe(
-                    axis.upper, center[i], domain[1], search.expansion_factor, False
+                    axis.upper, center_value, domain[1], search.expansion_factor, False
                 ),
             ]
             if all(value is None for value in next_values):
@@ -589,49 +587,42 @@ def _run_bound_search(
             for side, value in zip((axis.lower, axis.upper), next_values, strict=True):
                 if value is not None:
                     side.value = value
-        post_processing_seconds += perf_counter() - processing_started
+        finally:
+            post_processing_seconds += perf_counter() - processing_started
 
-    diagnostics = []
-    bounds = []
-    for i, axis in enumerate(axes):
-        endpoint_observations = [
-            cache[point(i, side.value)][0]
-            for side in (axis.lower, axis.upper)
-            if point(i, side.value) in cache
-        ]
-        evidence = endpoint_observations or [center_observation]
-        circuits = [c for o in evidence for c in o.circuits]
-        interval = (axis.lower.value, axis.upper.value)
-        bounds.append(interval if axis.status is BoundSearchStatus.CONVERGED else None)
-        diagnostics.append(
-            ParameterSearchDiagnostic(
-                parameter_index=i,
-                status=axis.status,
-                candidate_interval=interval,
-                trial_count=axis.trials,
-                endpoint_snr=(
-                    axis.snr
-                    if axis.lower.value == axis.lower.feasible
-                    and axis.upper.value == axis.upper.feasible
-                    else None
-                ),
-                min_failures=min((c.fails for c in circuits), default=None),
-                max_lep=max(
-                    (
-                        c.lep_interval.best
-                        for c in circuits
-                        if c.lep_interval is not None
-                    ),
-                    default=None,
-                ),
-                reason=axis.reason,
-            )
-        )
+    endpoint_observations = [
+        cache[point(side.value)][0]
+        for side in (axis.lower, axis.upper)
+        if point(side.value) in cache
+    ]
+    evidence = endpoint_observations or [center_observation]
+    circuits = [c for o in evidence for c in o.circuits]
+    interval = (axis.lower.value, axis.upper.value)
+    bound = interval if axis.status is BoundSearchStatus.CONVERGED else None
+    diagnostic = ParameterSearchDiagnostic(
+        parameter_index=0,
+        status=axis.status,
+        candidate_interval=interval,
+        trial_count=axis.trials,
+        endpoint_snr=(
+            axis.snr
+            if axis.lower.value == axis.lower.feasible
+            and axis.upper.value == axis.upper.feasible
+            else None
+        ),
+        min_failures=min((c.fails for c in circuits), default=None),
+        max_lep=max(
+            (c.lep_interval.best for c in circuits if c.lep_interval is not None),
+            default=None,
+        ),
+        reason=axis.reason,
+    )
+
     return BoundsSearchResult(
-        bounds=tuple(bounds),
+        bounds=(bound,),
         evaluation_point=center,
         gradient_evaluation_scale=scale,
-        diagnostics=tuple(diagnostics),
+        diagnostics=(diagnostic,),
         pilot_data=pd.concat(reports, ignore_index=True) if reports else pd.DataFrame(),
         observations=tuple(record[0] for record in cache.values()),
         phase_timings=BoundSearchTimings(
@@ -643,9 +634,18 @@ def _run_bound_search(
     )
 
 
+def _apply_scalar_noise(
+    noise_model: Callable[[Circuit, float], Circuit],
+    circuit: Circuit,
+    vector: Sequence[float],
+) -> Circuit:
+    """Adapt a scalar noise model to the pilot sampler's vector interface."""
+    return noise_model(circuit, float(vector[0]))
+
+
 def find_error_budget_bounds(
-    noise_model: Callable[[Circuit, npt.NDArray[np.floating]], Circuit],
-    noise_parameters: npt.NDArray[np.floating] | Sequence[float],
+    noise_model: Callable[[Circuit, float], Circuit],
+    noise_parameter: float,
     num_rounds_by_distances: Mapping[int, Sequence[int]],
     *,
     search_parameters: BoundSearchParameters,
@@ -658,23 +658,23 @@ def find_error_budget_bounds(
     enable_correlations: bool = False,
     seed: int | None = None,
 ) -> BoundsSearchResult:
-    """Search for feasible, distinguishable endpoints along each noise coordinate.
+    """Search for feasible endpoints for one noise parameter.
 
-    The state machine consumes a batch evaluator independently of simulation. Until
-    the pilot simulation adapter is connected, initial candidates are retained in
-    diagnostics and bounds remain unresolved.
+    The state machine consumes a fixed-shot batch evaluator independently of
+    simulation. Pilot observations and noiseless circuits are cached within this
+    call; production budgeting performs fresh sampling.
 
     Args:
-        noise_model: Callable adding noise to a circuit using the supplied vector.
-        noise_parameters: Finite, nonempty one-dimensional calibration vector.
+        noise_model: Callable adding noise to a circuit using the supplied scalar parameter.
+        noise_parameter: Finite scalar calibration value.
         num_rounds_by_distances: Memory-experiment round counts for each distance.
-        search_parameters: Required search configuration with one domain per
-            calibration parameter. The scaled center must lie inside each domain.
-        gradient_evaluation_scale: Finite positive scalar multiplying the entire
-            calibration vector. Defaults to 0.5, selecting half calibration.
+        search_parameters: Required search configuration with exactly one domain.
+            The scaled center must lie inside this domain.
+        gradient_evaluation_scale: Finite positive scalar multiplying the
+            calibration value. Defaults to 0.5, selecting half calibration.
         shots_per_trial: Positive number of shots per distance/round circuit at
-            each probed vector, not a total divided across the circuits. Enforced
-            on evaluator results; real sampling awaits the simulation adapter.
+            each probed value, not a total divided across the circuits. Partial
+            final batches are included and early stopping is disabled.
         fitting_parameters: Production fit configuration. Used to enforce positive
             intervals for logarithmic discretisation; degree and point count are
             preserved and no fit design is generated here.
@@ -683,13 +683,13 @@ def find_error_budget_bounds(
             ignored in favour of shots_per_trial and fixed-shot sampling.
         memory_generator: Callable generating noiseless memory circuits, or a
             distance-to-rounds mapping of precomputed circuits.
-        enable_correlations: Correlated PyMatching setting for the future sampler.
-        seed: Optional seed for the future sampler.
+        enable_correlations: Enable correlated matching during construction and decoding.
+        seed: Optional root seed for the pilot stream, separate from production.
+            Reproducibility requires fixed backend, version, batching, and workers.
 
     Returns:
-        Validated intervals and retained pilot evidence, with None for unresolved
-        coordinates. Until the simulation adapter is connected, returns unsampled
-        candidates in diagnostics and no validated bounds.
+        One validated interval and retained pilot evidence, with None if unresolved.
+        Unresolved candidate intervals and their reasons remain in diagnostics.
 
     Raises:
         ValueError: If calibration, scale, experiments, shot/execution settings,
@@ -697,8 +697,18 @@ def find_error_budget_bounds(
             fit strategy, or an evaluator violates the batch contract.
     """
     started = perf_counter()
-    centers = _resolve_gradient_point(noise_parameters, gradient_evaluation_scale)
-    search_parameters.validate_parameter_count(len(centers))
+    scale = gradient_evaluation_scale
+    if (
+        isinstance(noise_parameter, bool)
+        or not isinstance(noise_parameter, Real)
+        or not np.isfinite(noise_parameter)
+    ):
+        msg = "noise_parameter must be a finite scalar."
+        raise ValueError(msg)
+    center = float(
+        _resolve_gradient_point(np.array([float(noise_parameter)]), scale)[0]
+    )
+    search_parameters.validate_parameter_count(1)
     for name, value in (
         ("shots_per_trial", shots_per_trial),
         ("batch_size", sampling_parameters.batch_size),
@@ -708,70 +718,49 @@ def find_error_budget_bounds(
             msg = f"{name} must be a positive integer."
             raise ValueError(msg)
 
-    domains = np.asarray(search_parameters.parameter_domains)
-    if np.any((centers <= domains[:, 0]) | (centers >= domains[:, 1])):
-        msg = "The evaluation point must lie strictly inside every parameter domain."
+    domain = search_parameters.parameter_domains[0]
+    if not domain[0] < center < domain[1]:
+        msg = "The evaluation point must lie strictly inside the parameter domain."
         raise ValueError(msg)
-    if np.any(centers == 0):
+    if center == 0:
         msg = "A zero evaluation coordinate needs explicit bounds; relative width is undefined."
         raise ValueError(msg)
-
     logarithmic = (
         fitting_parameters.discretisation_strategy == DiscretisationStrategy.LOGARITHMIC
     )
-    if logarithmic and np.any(centers <= 0):
-        msg = "A logarithmic fit requires strictly positive evaluation coordinates."
+    if logarithmic and center <= 0:
+        msg = "A logarithmic fit requires a strictly positive evaluation coordinate."
         raise ValueError(msg)
     with np.errstate(over="ignore", under="ignore"):
-        half_widths = search_parameters.initial_relative_half_width * np.abs(centers)
-        lower = np.maximum(domains[:, 0], centers - half_widths)
-        upper = np.minimum(domains[:, 1], centers + half_widths)
-    if logarithmic:
-        # Move halfway toward zero rather than inventing a tiny physical scale.
-        lower = np.where(lower <= 0, centers / 2, lower)
-    if np.any((lower >= centers) | (upper <= centers)) or (
-        logarithmic and np.any(lower <= 0)
-    ):
-        msg = "Initial intervals cannot strictly contain the evaluation point; supply explicit bounds."
+        half_width = search_parameters.initial_relative_half_width * abs(center)
+        lower = max(domain[0], center - half_width)
+        upper = min(domain[1], center + half_width)
+    if logarithmic and lower <= 0:
+        lower = center / 2
+    if not lower < center < upper or (logarithmic and lower <= 0):
+        msg = "Initial interval cannot strictly contain the evaluation point; supply explicit bounds."
         raise ValueError(msg)
 
     estimator_warnings = _validate_experiments(num_rounds_by_distances)
     evaluator = _make_pilot_evaluator(
-        noise_model=noise_model,
+        noise_model=partial(_apply_scalar_noise, noise_model),
         num_rounds_by_distances=num_rounds_by_distances,
         shots_per_trial=shots_per_trial,
         sampling_parameters=sampling_parameters,
         memory_generator=memory_generator,
         enable_correlations=enable_correlations,
         seed=seed,
+        search_parameters=search_parameters,
     )
-    if evaluator is not None:
-        return _run_bound_search(
-            centers,
-            tuple(zip(lower, upper, strict=True)),
-            num_rounds_by_distances,
-            search_parameters,
-            gradient_evaluation_scale,
-            shots_per_trial,
-            logarithmic,
-            evaluator,
-            estimator_warnings,
-            started,
-        )
-
-    diagnostics = tuple(
-        ParameterSearchDiagnostic(
-            parameter_index=i,
-            status=BoundSearchStatus.NOT_EVALUATED,
-            candidate_interval=(float(lo), float(hi)),
-            reason="The pilot simulation adapter is not implemented yet.",
-        )
-        for i, (lo, hi) in enumerate(zip(lower, upper, strict=True))
-    )
-    return BoundsSearchResult(
-        bounds=(None,) * len(centers),
-        evaluation_point=tuple(map(float, centers)),
-        gradient_evaluation_scale=float(gradient_evaluation_scale),
-        diagnostics=diagnostics,
-        phase_timings=BoundSearchTimings(total_seconds=perf_counter() - started),
+    return _run_bound_search(
+        center,
+        (lower, upper),
+        num_rounds_by_distances,
+        search_parameters,
+        scale,
+        shots_per_trial,
+        logarithmic,
+        evaluator,
+        estimator_warnings,
+        started,
     )

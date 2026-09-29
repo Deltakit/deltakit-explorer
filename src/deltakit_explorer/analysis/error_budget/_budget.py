@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import astuple, dataclass, replace
+from functools import partial
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 from deltakit_circuit._circuit import Circuit
 
 from deltakit_explorer.analysis.error_budget._bounds import (
     BoundsDiscoveryError,
+    BoundSearchTimings,
     BoundsSearchResult,
     find_error_budget_bounds,
 )
@@ -65,6 +68,19 @@ class ErrorBudgetResult:
         )
 
 
+def _vary_noise_parameter(
+    noise_model: Callable[[Circuit, npt.NDArray[np.floating]], Circuit],
+    point: npt.NDArray[np.floating],
+    index: int,
+    circuit: Circuit,
+    value: float,
+) -> Circuit:
+    """Vary one noise coordinate while preserving the other evaluation values."""
+    vector = point.copy()
+    vector[index] = value
+    return noise_model(circuit, vector)
+
+
 def get_error_budget(
     noise_model: Callable[[Circuit, npt.NDArray[np.floating]], Circuit],
     noise_parameters: npt.NDArray[np.floating] | Sequence[float],
@@ -83,11 +99,6 @@ def get_error_budget(
 ) -> ErrorBudgetResult:
     """Compute the error budget of the provided ``noise_model``.
 
-    Note:
-        The pilot simulation adapter is not connected yet, so
-        automatic mode currently raises BoundsDiscoveryError with an unresolved
-        result. Explicit-bound budgeting remains available.
-
     Args:
         noise_model (Callable[[Circuit, npt.NDArray[np.floating]], Circuit]): a callable
             adding noise to the provided circuit, according to the parameters provided.
@@ -100,7 +111,8 @@ def get_error_budget(
             sampled in order to estimate the logical error-probability per round, to
             ultimately get 1 / Λ.
         noise_parameters_exploration_bounds: ``(min, max)`` bounds for each noise
-            parameter, or ``None`` to invoke discovery. Explicit bounds bypass
+            parameter, or ``None`` to discover each parameter separately while holding the others
+            at their evaluation values. Explicit bounds bypass
             discovery. A degree
             ``fitting_degree`` polynomial will be fitted on the interval ``[min, max]``.
             The corresponding scaled evaluation coordinate should
@@ -128,10 +140,10 @@ def get_error_budget(
             domain count is validated against the calibration vector.
         bound_search_shots_per_trial: pilot shots per distance/round circuit at each
             probed vector, forwarded to discovery separately from production shots.
-        enable_correlations: correlation setting forwarded to discovery. Reserved
-            for its future sampling adapter; production decoding is unchanged.
-        seed: seed forwarded to discovery. Reserved for its future sampling
-            adapter; this does not currently seed production sampling.
+        enable_correlations: use correlated matching for pilot and production decoding.
+        seed: optional root seed. Pilot and production use separate streams and
+            distinct task seeds. Reproducibility requires fixed backend, version,
+            batching, and worker configuration.
 
     Returns:
         the error-budgeting result, which consists of an array of contributions for each
@@ -152,18 +164,63 @@ def get_error_budget(
         if bound_search_parameters is None:
             msg = "Automatic discovery requires bound_search_parameters with parameter domains."
             raise ValueError(msg)
-        search_result = find_error_budget_bounds(
-            noise_model,
-            parameters,
-            num_rounds_by_distances,
-            search_parameters=bound_search_parameters,
+        results = []
+        observations = []
+        reports = []
+        for index, parameter in enumerate(parameters):
+            result = find_error_budget_bounds(
+                partial(_vary_noise_parameter, noise_model, point, index),
+                float(parameter),
+                num_rounds_by_distances,
+                search_parameters=replace(
+                    bound_search_parameters,
+                    parameter_domains=(
+                        bound_search_parameters.parameter_domains[index],
+                    ),
+                ),
+                gradient_evaluation_scale=gradient_evaluation_scale,
+                shots_per_trial=bound_search_shots_per_trial,
+                fitting_parameters=fitting_parameters,
+                sampling_parameters=sampling_parameters,
+                memory_generator=memory_generator,
+                enable_correlations=enable_correlations,
+                seed=seed,
+            )
+            results.append(result)
+            offset = len(observations)
+            for observation in result.observations:
+                vector = point.copy()
+                vector[index] = observation.noise_parameters[0]
+                observations.append(
+                    replace(
+                        observation,
+                        point_id=offset + observation.point_id,
+                        noise_parameters=tuple(vector),
+                    )
+                )
+            if not result.pilot_data.empty:
+                report = result.pilot_data.copy()
+                report["point_id"] += offset
+                if "noise_0" in report:
+                    values = report["noise_0"].copy()
+                    for axis, center in enumerate(point):
+                        report[f"noise_{axis}"] = values if axis == index else center
+                reports.append(report)
+        search_result = BoundsSearchResult(
+            bounds=tuple(result.bounds[0] for result in results),
+            evaluation_point=tuple(point),
             gradient_evaluation_scale=gradient_evaluation_scale,
-            shots_per_trial=bound_search_shots_per_trial,
-            fitting_parameters=fitting_parameters,
-            sampling_parameters=sampling_parameters,
-            memory_generator=memory_generator,
-            enable_correlations=enable_correlations,
-            seed=seed,
+            diagnostics=tuple(
+                replace(result.diagnostics[0], parameter_index=index)
+                for index, result in enumerate(results)
+            ),
+            pilot_data=pd.concat(reports, ignore_index=True)
+            if reports
+            else pd.DataFrame(),
+            observations=tuple(observations),
+            phase_timings=BoundSearchTimings(
+                *map(sum, zip(*(astuple(r.phase_timings) for r in results)))
+            ),
         )
         if not search_result.success:
             unresolved = [
@@ -183,6 +240,8 @@ def get_error_budget(
         fitting_parameters,
         sampling_parameters,
         memory_generator,
+        enable_correlations=enable_correlations,
+        seed=seed,
     )
     result = ErrorBudgetResult.from_gradient(gradient, gradient_stddev, parameters)
     result.bound_search_result = search_result

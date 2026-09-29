@@ -2,6 +2,7 @@
 import itertools
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
+from copy import deepcopy
 
 import numpy as np
 import numpy.typing as npt
@@ -10,10 +11,25 @@ from deltakit_decode._mwpm_decoder import PyMatchingDecoder
 from deltakit_decode.analysis._matching_decoder_managers import StimDecoderManager
 from tqdm import tqdm
 
+from deltakit_explorer.analysis.error_budget._decoding import (
+    _CorrelatedMatchingDecoder,
+    _SeededStimDecoderManager,
+)
 from deltakit_explorer.analysis.error_budget._memory import (
     MemoryGenerator,
     get_rotated_surface_code_memory_circuit,
 )
+
+
+def _point_ids(xi: npt.NDArray[np.floating]) -> list[int]:
+    """Assign stable IDs to exact vectors, sharing IDs for replicated points."""
+    registry: dict[tuple[float, ...], int] = {}
+    return [registry.setdefault(tuple(vector), len(registry)) for vector in xi.T]
+
+
+def _seed_stream(seed: int | None, stream: int) -> np.random.SeedSequence | None:
+    """Separate pilot (0) and production (1) streams without consuming either."""
+    return None if seed is None else np.random.SeedSequence(seed, spawn_key=(stream,))
 
 
 def _generate_surface_code_memory_decoder_manager(
@@ -23,6 +39,10 @@ def _generate_surface_code_memory_decoder_manager(
     noise_parameters: npt.NDArray[np.floating],
     memory_generator: MemoryGenerator,
     noise_parameter_names: Sequence[str],
+    point_id: int | None = None,
+    enable_correlations: bool = False,
+    seed: int | None = None,
+    batch_size: int = 10_000,
 ) -> StimDecoderManager:
     """Generate a decoder manager with a rotated planar code memory experiment.
 
@@ -40,13 +60,20 @@ def _generate_surface_code_memory_decoder_manager(
             given distance and number of rounds.
         noise_parameter_names: if provided, human-readable names for each of the
             provided ``noise_parameters``.
+        point_id: Exact-vector identity to retain in task metadata.
+        enable_correlations: Use the complete DEM for correlated matching.
+        seed: Independent seed for this sampling task.
+        batch_size: Internal sampling batch size.
 
     Returns:
         a decoder manager that can then be run using ``RunAllAnalysisEngine``.
     """
-    circuit = memory_generator(distance, num_rounds)
-    noisy_circuit = noise_model(circuit, noise_parameters)
-    decoder, decoder_circuit = PyMatchingDecoder.construct_decoder_and_stim_circuit(
+    circuit = deepcopy(memory_generator(distance, num_rounds))
+    noisy_circuit = noise_model(circuit, noise_parameters.copy())
+    decoder_type = (
+        _CorrelatedMatchingDecoder if enable_correlations else PyMatchingDecoder
+    )
+    decoder, decoder_circuit = decoder_type.construct_decoder_and_stim_circuit(
         noisy_circuit
     )
     metadata = {
@@ -57,8 +84,19 @@ def _generate_surface_code_memory_decoder_manager(
             for name, p in zip(noise_parameter_names, noise_parameters, strict=True)
         },
     }
+    if point_id is not None:
+        metadata["point_id"] = point_id
+    if seed is not None:
+        metadata["seed"] = seed
 
-    return StimDecoderManager(decoder_circuit, decoder, metadata=metadata)
+    manager_type = _SeededStimDecoderManager if seed is not None else StimDecoderManager
+    return manager_type(
+        decoder_circuit,
+        decoder,
+        metadata=metadata,
+        seed=seed,
+        batch_size=batch_size,
+    )
 
 
 def _generate_surface_code_memory_decoder_manager_wrapper(
@@ -69,6 +107,10 @@ def _generate_surface_code_memory_decoder_manager_wrapper(
         npt.NDArray[np.floating],
         MemoryGenerator,
         Sequence[str],
+        int,
+        bool,
+        int | None,
+        int,
     ],
 ) -> StimDecoderManager:
     return _generate_surface_code_memory_decoder_manager(*data)
@@ -81,6 +123,11 @@ def generate_decoder_managers_for_lambda(
     max_workers: int = 1,
     memory_generator: MemoryGenerator = get_rotated_surface_code_memory_circuit,
     noise_parameter_names: Sequence[str] | None = None,
+    *,
+    point_ids: Sequence[int] | None = None,
+    enable_correlations: bool = False,
+    seed: int | np.random.SeedSequence | None = None,
+    batch_size: int = 10_000,
 ) -> list[StimDecoderManager]:
     """Generate several decoder managers from the provided arguments for a rotated
     planar code memory experiment.
@@ -120,12 +167,22 @@ def generate_decoder_managers_for_lambda(
         noise_parameter_names: if provided, human-readable names for each of the
             provided ``noise_parameters``. Defaults to the noise parameter index (i.e.,
             "0", "1", ...).
+        point_ids: IDs for columns of xi. By default, exact duplicate vectors share
+            an ID but retain separate sampling tasks and independent seeds.
+        enable_correlations: Enable correlated matching in construction and decoding.
+        seed: Seed or call-local seed stream from which to spawn distinct task seeds.
+        batch_size: Internal sampling batch size for each manager.
 
     Returns:
         a list of decoder managers that can then be run using ``RunAllAnalysisEngine``.
     """
     if noise_parameter_names is None:
         noise_parameter_names = [str(i) for i in range(xi.shape[0])]
+    if point_ids is None:
+        point_ids = _point_ids(xi)
+    if len(point_ids) != xi.shape[1]:
+        msg = "point_ids must contain one ID per sampling column."
+        raise ValueError(msg)
     # 0. Transposing to be able to iterate on different values.
     noise_parameters = xi.T
     # 1. Check input parameters
@@ -137,6 +194,19 @@ def generate_decoder_managers_for_lambda(
     total_circuits = (
         sum(len(num_rounds) for num_rounds in num_rounds_by_distances.values())
         * noise_parameters.shape[0]
+    )
+    seed_sequence = (
+        seed
+        if isinstance(seed, np.random.SeedSequence)
+        else (np.random.SeedSequence(seed) if seed is not None else None)
+    )
+    task_seeds = iter(
+        [
+            int(child.generate_state(1, dtype=np.uint64)[0])
+            for child in seed_sequence.spawn(total_circuits)
+        ]
+        if seed_sequence is not None
+        else [None] * total_circuits
     )
     # (distance: int, num_rounds: int)
     distance_and_rounds_iterator = itertools.chain.from_iterable(
@@ -151,9 +221,13 @@ def generate_decoder_managers_for_lambda(
             noise_parameter,
             memory_generator,
             noise_parameter_names,
+            point_id,
+            enable_correlations,
+            next(task_seeds),
+            batch_size,
         )
-        for ((distance, num_rounds), noise_parameter) in itertools.product(
-            distance_and_rounds_iterator, noise_parameters
+        for ((distance, num_rounds), (point_id, noise_parameter)) in itertools.product(
+            distance_and_rounds_iterator, zip(point_ids, noise_parameters, strict=True)
         )
     )
     # 3. Generate the decoder managers
