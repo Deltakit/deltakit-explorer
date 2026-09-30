@@ -525,22 +525,16 @@ def fit_logical_error_per_round_asymmetric(
 def calculate_lep_and_lep_stddev(
     fails: npt.NDArray[np.int_] | Sequence[int] | int,
     shots: npt.NDArray[np.int_] | Sequence[int] | int,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | tuple[float, float]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Calculate the logical error probability (lep) and its standard deviation.
 
     Args:
-        fails: The number of logical failures. A Python integer, a NumPy
-            integer scalar or a 0-d array all count as scalar input.
-        shots: The number of shots the experiment was run for. Scalars are
-            treated as for ``fails``.
+        fails: The number of logical failures.
+        shots: The number of shots the experiment was run for.
 
     Returns:
         A tuple consisting of the logical error probability
-        and its standard deviation. When both inputs are scalar the values
-        are returned as Python floats, so they can be used directly in
-        formatted strings. Otherwise both are returned as arrays, and a
-        scalar paired with an array is treated as a length-1 array, so
-        mismatched lengths still raise.
+        and its standard deviation.
 
     Raises:
         ValueError: When inputs do not match lengths or have non-positive entries.
@@ -554,18 +548,9 @@ def calculate_lep_and_lep_stddev(
         ...     shots=[500000] * 3,
         ... )
 
-        Scalar inputs, including the NumPy integers found in simulation
-        results, return floats:
-
-        >>> lep, lep_stddev = analysis.calculate_lep_and_lep_stddev(
-        ...     fails=3778,
-        ...     shots=100000,
-        ... )
-
     """
-    scalar_inputs = np.ndim(fails) == 0 and np.ndim(shots) == 0
-    fails = np.atleast_1d(np.asarray(fails))
-    shots = np.atleast_1d(np.asarray(shots))
+    fails = np.asarray([fails]) if isinstance(fails, int) else np.asarray(fails)
+    shots = np.asarray([shots]) if isinstance(shots, int) else np.asarray(shots)
     if len(fails) != len(shots):
         msg = "Input data do not match lengths."
         raise ValueError(msg)
@@ -576,8 +561,6 @@ def calculate_lep_and_lep_stddev(
     # (see issue #134).
     lep = fails / shots
     lep_stddev = np.sqrt(lep * (1 - lep) / shots)
-    if scalar_inputs:
-        return lep.item(), lep_stddev.item()
     return lep, lep_stddev
 
 
