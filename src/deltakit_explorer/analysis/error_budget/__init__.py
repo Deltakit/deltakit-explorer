@@ -10,6 +10,7 @@ from ._bounds import (
 from ._budget import get_error_budget
 from ._discretisation import (
     DiscretisationStrategy,
+    get_c_optimal_points,
     get_linear_points,
     get_logarithmic_points,
 )
