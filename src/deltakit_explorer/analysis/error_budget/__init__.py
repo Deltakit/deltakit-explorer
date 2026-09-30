@@ -3,15 +3,11 @@
 
 from ._bounds import (
     BoundsDiscoveryError,
-    BoundSearchStatus,
-    BoundSearchTimings,
+    BoundSearchParameters,
     BoundsSearchResult,
-    CircuitPilotObservation,
-    LambdaPilotObservation,
-    ParameterSearchDiagnostic,
     find_error_budget_bounds,
 )
-from ._budget import ErrorBudgetResult, get_error_budget
+from ._budget import get_error_budget
 from ._discretisation import (
     DiscretisationStrategy,
     get_linear_points,
@@ -21,6 +17,6 @@ from ._generation import generate_decoder_managers_for_lambda
 from ._gradient import inverse_lambda_gradient_at
 from ._lambda import inverse_lambda_at, inverse_lambda_interval_at
 from ._memory import MemoryGenerator, get_rotated_surface_code_memory_circuit
-from ._parameters import BoundSearchParameters, FittingParameters, SamplingParameters
+from ._parameters import FittingParameters, SamplingParameters
 from ._post_processing import compute_lambda_and_stddev_from_results
 from ._visualisation import plot_error_budget

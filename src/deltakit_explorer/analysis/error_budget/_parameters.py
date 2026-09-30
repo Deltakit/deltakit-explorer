@@ -1,7 +1,5 @@
 # (c) Copyright Riverlane 2020-2026. All rights reserved.
-from collections.abc import Sequence
 from dataclasses import dataclass
-from numbers import Integral, Real
 
 import numpy as np
 import numpy.typing as npt
@@ -9,46 +7,6 @@ import numpy.typing as npt
 from deltakit_explorer.analysis.error_budget._discretisation import (
     DiscretisationStrategy,
 )
-
-
-def _resolve_gradient_point(
-    noise_parameters: npt.NDArray[np.floating] | Sequence[float],
-    scale: float,
-) -> npt.NDArray[np.floating]:
-    """Validate calibration and scale, then resolve the gradient evaluation vector.
-
-    Args:
-        noise_parameters: Nonempty, finite one-dimensional calibration vector.
-        scale: Finite positive scalar multiplier.
-
-    Returns:
-        A new array containing the scaled calibration vector.
-
-    Raises:
-        ValueError: If calibration, scale, or the resulting vector is invalid.
-    """
-    if (
-        isinstance(scale, bool)
-        or not isinstance(scale, Real)
-        or not np.isfinite(scale)
-        or scale <= 0
-    ):
-        msg = "gradient_evaluation_scale must be a finite positive scalar."
-        raise ValueError(msg)
-    parameters = np.asarray(noise_parameters, dtype=float)
-    if (
-        parameters.ndim != 1
-        or parameters.size == 0
-        or not np.all(np.isfinite(parameters))
-    ):
-        msg = "noise_parameters must be a nonempty, finite one-dimensional vector."
-        raise ValueError(msg)
-    with np.errstate(over="ignore", under="ignore"):
-        point = parameters * scale
-    if not np.all(np.isfinite(point)):
-        msg = "gradient_evaluation_scale produces a non-finite evaluation point."
-        raise ValueError(msg)
-    return point
 
 
 @dataclass(frozen=True)
@@ -116,90 +74,3 @@ class SamplingParameters:
 
     Default to ``1`` which means fully sequential.
     """
-
-
-@dataclass(frozen=True)
-class BoundSearchParameters:
-    """Configuration for automatic error-budget bound discovery.
-
-    Attributes:
-        parameter_domains: Finite, ordered limits for each noise parameter. Domains
-            are copied to immutable tuples and need not be probability intervals.
-        initial_relative_half_width: Positive initial half-width relative to the
-            absolute evaluation coordinate.
-        expansion_factor: Finite factor greater than one for interval expansion.
-        sensitivity_z_score: Positive endpoint signal-to-noise threshold.
-        min_logical_failures: Positive integer failure-count floor per experiment.
-        max_lep: Logical error probability ceiling, strictly between zero and 0.5.
-        max_trials_per_param: Positive integer cap on new noncentral probes
-            for each parameter.
-
-    Raises:
-        ValueError: If domains are empty, malformed, non-finite, or unordered, or
-            a configuration field is outside its allowed range.
-    """
-
-    parameter_domains: Sequence[tuple[float, float]]
-    initial_relative_half_width: float = 0.25
-    expansion_factor: float = 2.0
-    sensitivity_z_score: float = 3.0
-    min_logical_failures: int = 10
-    max_lep: float = 0.45
-    max_trials_per_param: int = 16
-
-    def __post_init__(self) -> None:
-        domain_error = (
-            "parameter_domains must be a nonempty sequence of finite "
-            "(lower, upper) pairs with lower < upper."
-        )
-        try:
-            domains = np.asarray(self.parameter_domains, dtype=float)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(domain_error) from exc
-        if (
-            domains.ndim != 2
-            or domains.shape[0] == 0
-            or domains.shape[1] != 2
-            or not np.all(np.isfinite(domains))
-            or np.any(domains[:, 0] >= domains[:, 1])
-        ):
-            raise ValueError(domain_error)
-        object.__setattr__(
-            self,
-            "parameter_domains",
-            tuple((float(lower), float(upper)) for lower, upper in domains),
-        )
-
-        for name, minimum in (
-            ("initial_relative_half_width", 0),
-            ("expansion_factor", 1),
-            ("sensitivity_z_score", 0),
-        ):
-            value = getattr(self, name)
-            if not np.isfinite(value) or value <= minimum:
-                msg = f"{name} must be finite and greater than {minimum}."
-                raise ValueError(msg)
-        if not np.isfinite(self.max_lep) or not 0 < self.max_lep < 0.5:
-            msg = "max_lep must be finite and strictly between 0 and 0.5."
-            raise ValueError(msg)
-        for name in ("min_logical_failures", "max_trials_per_param"):
-            value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
-                msg = f"{name} must be a positive integer."
-                raise ValueError(msg)
-
-    def validate_parameter_count(self, num_parameters: int) -> None:
-        """Check that every calibration parameter has a domain.
-
-        Args:
-            num_parameters: Number of entries in the calibration vector.
-
-        Raises:
-            ValueError: If the number of domains does not match the vector.
-        """
-        if len(self.parameter_domains) != num_parameters:
-            msg = (
-                f"parameter_domains must contain {num_parameters} domains to match "
-                f"noise_parameters; got {len(self.parameter_domains)}."
-            )
-            raise ValueError(msg)

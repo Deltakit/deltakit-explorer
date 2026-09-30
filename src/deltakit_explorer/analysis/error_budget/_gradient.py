@@ -10,7 +10,6 @@ from uncertainties import correlated_values
 
 from deltakit_explorer.analysis._estimate import Estimate
 from deltakit_explorer.analysis.error_budget._generation import (
-    _seed_stream,
     generate_decoder_managers_for_lambda,
 )
 from deltakit_explorer.analysis.error_budget._lambda import reciprocal_stddev
@@ -170,10 +169,6 @@ def generate_sweep_parameters(
         ``(fitting_parameters.num_points_per_parameters * central_point.size, central_point.size)``
         that contains as rows variations of ``central_point`` where a single parameter has been
         changed each time.
-
-    Note:
-        Each axis must have at least degree + 1 distinct design points; the
-        design validator raises ValueError otherwise.
     """
     # Getting the points on which we will estimate 1 / Λ into ``noise_parameters``.
     # This is performing a sweeping for each parameter individually.
@@ -186,42 +181,7 @@ def generate_sweep_parameters(
         )
         xis.extend(_variate_ith_parameter_by(central_point, variations, i))
 
-    sweep = np.asarray(xis).T
-    _axis_fit_columns(sweep, fitting_parameters)
-    return sweep
-
-
-def _axis_fit_columns(
-    sweep: npt.NDArray[np.floating],
-    fitting_parameters: FittingParameters,
-) -> list[npt.NDArray[np.int_]]:
-    """Select each pooled point once per axis and check polynomial support.
-
-    Args:
-        sweep: Noise vectors stored as columns, starting with the center.
-        fitting_parameters: Number of design points per axis and polynomial degree.
-
-    Returns:
-        Column indices selecting distinct coordinates for each axis fit.
-
-    Raises:
-        ValueError: If an axis has fewer than degree + 1 distinct design points.
-    """
-    axes = []
-    for axis in range(sweep.shape[0]):
-        start = 1 + fitting_parameters.num_points_per_parameters * axis
-        stop = start + fitting_parameters.num_points_per_parameters
-        columns = np.array([0, *range(start, stop)])
-        _, distinct = np.unique(sweep[axis, columns], return_index=True)
-        if len(distinct) < fitting_parameters.fitting_degree + 1:
-            msg = (
-                f"Axis {axis} has {len(distinct)} distinct points; a degree "
-                f"{fitting_parameters.fitting_degree} polynomial requires at least "
-                f"{fitting_parameters.fitting_degree + 1}."
-            )
-            raise ValueError(msg)
-        axes.append(columns[np.sort(distinct)])
-    return axes
+    return np.asarray(xis).T
 
 
 def get_decoding_result(
@@ -232,9 +192,6 @@ def get_decoding_result(
     fitting_parameters: FittingParameters = FittingParameters(),
     sampling_parameters: SamplingParameters = SamplingParameters(),
     memory_generator: MemoryGenerator = get_rotated_surface_code_memory_circuit,
-    *,
-    enable_correlations: bool = False,
-    seed: int | None = None,
 ) -> pd.DataFrame:
     """Construct, sample and decode the experiments represented by the input parameters
     and returns statistics on the success rate of each experiment.
@@ -259,9 +216,6 @@ def get_decoding_result(
         memory_generator: a callable that can generate a memory experiment. The resulting
             circuit will go through the provided ``noise_model`` for different values of
             the noise parameters.
-        enable_correlations: Enable correlated matching during construction and decoding.
-        seed: Root seed for the production stream, separate from discovery. Results
-            are reproducible with fixed backend, version, batching, and workers.
 
     Returns:
         A pandas DataFrame containing the statistics resulting from sampling the provided
@@ -276,9 +230,6 @@ def get_decoding_result(
         sampling_parameters.max_workers,
         memory_generator=memory_generator,
         noise_parameter_names=noise_parameter_names,
-        enable_correlations=enable_correlations,
-        seed=_seed_stream(seed, 1),
-        batch_size=sampling_parameters.batch_size,
     )
 
     # Start the computation
@@ -327,7 +278,6 @@ def get_lambda_gradient(
         a tuple ``(gradient, stddev)`` containing the estimation of the gradient at the
         provided ``central_point`` and the standard deviation of the estimation.
     """
-    axis_columns = _axis_fit_columns(sweep_noise_parameters, fitting_parameters)
     # Post-process the results to get all the estimations for 1 / Λ
     lambdas, lambda_stddevs = compute_lambda_and_stddev_from_results(
         sweep_noise_parameters, noise_parameter_names, num_rounds_by_distances, report
@@ -345,8 +295,10 @@ def get_lambda_gradient(
     gradient: list[float] = []
     gradient_stddev: list[float] = []
     for npi, noise_parameter in enumerate(central_point.ravel()):
-        # Replicas retain their shots in the pooled estimate, not extra fit rows.
-        column_indices = axis_columns[npi]
+        start = 1 + fitting_parameters.num_points_per_parameters * npi
+        end = 1 + fitting_parameters.num_points_per_parameters * (npi + 1)
+        # Index 0 is ``central_point``, so it can be included in all estimations.
+        column_indices = [0, *list(range(start, end))]
         x = sweep_noise_parameters[npi, column_indices]
         y = lambda_reciprocals[0, column_indices]
         stddevs = lambda_reciprocal_stddevs[0, column_indices]
@@ -372,9 +324,6 @@ def inverse_lambda_gradient_at(
     memory_generator: (
         MemoryGenerator | Mapping[int, Mapping[int, Circuit]]
     ) = get_rotated_surface_code_memory_circuit,
-    *,
-    enable_correlations: bool = False,
-    seed: int | None = None,
 ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
     """The gradient of 1 / Λ at the provided ``noise_model_parameters``.
 
@@ -409,9 +358,7 @@ def inverse_lambda_gradient_at(
         memory_generator (MemoryGenerator): a callable that can generate a memory
             experiment. The resulting circuit will go through the provided
             ``noise_model`` for different values of the noise parameters.
-        enable_correlations: Enable correlated matching for production samples.
-        seed: Root seed for the independent production sampling stream. Reproducibility
-            requires fixed backend, version, batching, and worker configuration.
+
 
     Returns:
         the error-budgeting result, which consists of an array of contributions for each
@@ -446,8 +393,6 @@ def inverse_lambda_gradient_at(
         fitting_parameters,
         sampling_parameters,
         memory_generator,
-        enable_correlations=enable_correlations,
-        seed=seed,
     )
     # Compute the gradient of Λ from the sampling results.
     return get_lambda_gradient(
