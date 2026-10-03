@@ -63,13 +63,13 @@ def _variate_ith_parameter_by(
     successively replaced by values in ``variations``.
 
     Args:
-        central_point (npt.NDArray[numpy.floating]): base 1-dimensional array of numbers
+        central_point: base 1-dimensional array of numbers
             of shape ``(n,)`` that will be copied, modified on the ``i``-th variable and
             returned.
-        variations (npt.NDArray[numpy.floating]): 1-dimensional array of shape ``(m,)``
+        variations: 1-dimensional array of shape ``(m,)``
             containing values that should be used to replace the ``i``-th entry of
             ``central_point``.
-        i (int): index of the entry in ``central_point`` that should be changed.
+        i: index of the entry in ``central_point`` that should be changed.
 
     Yields:
         ``m`` arrays of shape ``(n,)`` that are copies of ``central_point`` with the
@@ -118,16 +118,16 @@ def _approximate_derivative_at_point_from_values(
         phenomenon will not impact our estimation too much.
 
     Args:
-        x (npt.NDArray[numpy.floating]): exact values on which we evaluated a noisy
+        x: exact values on which we evaluated a noisy
             function. Should be a 1-dimensional array.
-        y (npt.NDArray[numpy.floating]): best estimation of the result obtained from the
+        y: best estimation of the result obtained from the
             noisy function evaluation when evaluated on the corresponding entry in
             ``x``. Should be a 1-dimensional array.
-        stddevs (npt.NDArray[numpy.floating]): standard deviation of the estimate in
+        stddevs: standard deviation of the estimate in
             ``y``. Should be a 1-dimensional array.
-        gradient_approximation_point (float): point at which the gradient should be
+        gradient_approximation_point: point at which the gradient should be
             estimated.
-        degree (int): degree of the polynomial to fit the provided points and estimate
+        degree: degree of the polynomial to fit the provided points and estimate
             the gradient at ``gradient_approximation_point``.
 
     Returns:
@@ -205,7 +205,7 @@ def get_decoding_result(
             returned when calling ``generate_sweep_parameters``.
         noise_parameter_names: identifiers for each noise parameter, used to identify
             results in the returned statistics.
-        num_rounds_by_distances (Mapping[int, Sequence[int]]): a mapping from each code
+        num_rounds_by_distances: a mapping from each code
             distance that should be tested to the number of rounds that should be
             sampled in order to estimate the logical error-probability per round, to
             ultimately get 1 / Λ.
@@ -267,7 +267,7 @@ def get_lambda_gradient(
             returned when calling ``generate_sweep_parameters``.
         noise_parameter_names: identifiers for each noise parameter, used to identify
             results in the returned statistics.
-        num_rounds_by_distances (Mapping[int, Sequence[int]]): a mapping from each code
+        num_rounds_by_distances: a mapping from each code
             distance that should be tested to the number of rounds that should be
             sampled in order to estimate the logical error-probability per round, to
             ultimately get 1 / Λ.
@@ -328,16 +328,16 @@ def inverse_lambda_gradient_at(
     """The gradient of 1 / Λ at the provided ``noise_model_parameters``.
 
     Args:
-        noise_model (Callable[[Circuit, npt.NDArray[np.floating]], Circuit]): a callable
+        noise_model: a callable
             adding noise to the provided circuit, according to the parameters provided.
-        noise_parameters (npt.NDArray[numpy.floating] | Sequence[float]): valid
+        noise_parameters: valid
             parameters to forward to ``noise_model`` representing the point at which the
             gradient should be computed.
-        num_rounds_by_distances (Mapping[int, Sequence[int]]): a mapping from each code
+        num_rounds_by_distances: a mapping from each code
             distance that should be tested to the number of rounds that should be
             sampled in order to estimate the logical error-probability per round, to
             ultimately get 1 / Λ.
-        noise_parameters_exploration_bounds (list[tuple[float, float]]): ``(min, max)``
+        noise_parameters_exploration_bounds: ``(min, max)``
             bounds for each noise parameter of the provided ``noise_model``. A degree
             ``fitting_degree`` polynomial will be fitted on the interval ``[min, max]``.
             The corresponding noise parameter from the provided ``noise_model`` should
@@ -355,7 +355,7 @@ def inverse_lambda_gradient_at(
             estimated.
         sampling_parameters: additional parameters relating to the sampling tasks used to
             estimate 1 / Λ indirectly.
-        memory_generator (MemoryGenerator): a callable that can generate a memory
+        memory_generator: a callable that can generate a memory
             experiment. The resulting circuit will go through the provided
             ``noise_model`` for different values of the noise parameters.
 

@@ -13,13 +13,14 @@ class MemoryGenerator(Protocol):
 
 
 class PreComputedMemoryGenerator(MemoryGenerator):
-    def __init__(self, circuits: Mapping[int, Mapping[int, Circuit]]) -> None:
-        """A memory generator that used pre-computed circuits.
+    """A memory generator that uses pre-computed circuits.
 
-        Args:
-            circuits: a mapping from distance values to another mapping that maps num_rounds values
-                to actual quantum circuits. Will be used as ``circuits[distance][num_rounds]``.
-        """
+    Args:
+        circuits: a mapping from distance values to another mapping that maps num_rounds values
+            to actual quantum circuits. Will be used as ``circuits[distance][num_rounds]``.
+    """
+
+    def __init__(self, circuits: Mapping[int, Mapping[int, Circuit]]) -> None:
         super().__init__()
         self._circuits = circuits
 
@@ -35,7 +36,15 @@ class PreComputedMemoryGenerator(MemoryGenerator):
 
 
 def get_rotated_surface_code_memory_circuit(distance: int, num_rounds: int) -> Circuit:
-    """Returns a rotated surface code Z memory experiment."""
+    """Returns a rotated surface code Z memory experiment.
+
+    Args:
+        distance: distance of the rotated surface code.
+        num_rounds: number of stabiliser measurement rounds of the memory experiment.
+
+    Returns:
+        the noiseless Z-basis memory experiment circuit.
+    """
     return css_code_memory_circuit(
         RotatedPlanarCode(distance, distance), num_rounds, PauliBasis.Z
     )
