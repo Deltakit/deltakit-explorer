@@ -38,36 +38,36 @@ def compute_ideal_rounds_for_noise_model_and_distance(
     using a memory experiment as returned by the provided ``memory_generator``.
 
     Args:
-        noise_model (Callable[[Circuit, npt.NDArray[np.floating]], Circuit]): a callable
+        noise_model: a callable
             adding noise to the provided circuit, according to the parameters provided.
-        noise_parameters (npt.NDArray[numpy.floating] | Sequence[float]): valid
+        noise_parameters: valid
             parameters to forward to ``noise_model`` representing the point at which the
             ideal number of rounds should be computed.
-        distance (int): code distance for which we want to have the ideal numbers of
+        distance: code distance for which we want to have the ideal numbers of
             rounds to estimate the logical error probability per round.
-        max_shots (int): maximum number of shots performed by the simulations in this
+        max_shots: maximum number of shots performed by the simulations in this
             function. Simulations might perform less shots due to other conditions being
             met, for example a low-enough standard deviation according to
             ``target_stddev``.
-        batch_size (int): number of shots to perform per batch. Early-stopping conditions
+        batch_size: number of shots to perform per batch. Early-stopping conditions
             are checked after each chunks of ``batch_size`` shots.
-        initial_round_number (int): number of rounds to start the exploration with.
+        initial_round_number: number of rounds to start the exploration with.
             Should be strictly positive. Should likely not be ``1`` because data for
             ``1`` round is often an outlier. Only set this to ``1`` if you understand
             what you are doing and really want it.
-        min_fails (int): minimum number of fails that should be observed to be able to
+        min_fails: minimum number of fails that should be observed to be able to
             early-return before ``max_shots`` shots have been performed.
-        target_stddev (float): if the standard deviation of logical error probability
+        target_stddev: if the standard deviation of logical error probability
             estimation is below that threshold, simulation might early exit.
-        max_round_number (int): maximum number of rounds that should be tested.
-        next_round_number_func (Callable[[int], int]): an arbitrary callable that should
+        max_round_number: maximum number of rounds that should be tested.
+        next_round_number_func: an arbitrary callable that should
             return the next number of rounds to simulate from the previous one. It
             effectively describes the rounds that will be tested until the number of
             rounds is high enough to output a logical error probability over ``0.2`` or
             to exceed ``max_round_number``. Default to a geometric progression with a
             multiplicative factor of ``4``, but can be anything provided that it is
             strictly increasing.
-        memory_generator (MemoryGenerator): a callable returning a memory experiment
+        memory_generator: a callable returning a memory experiment
             from provided distance and number of rounds.
 
     Returns:
