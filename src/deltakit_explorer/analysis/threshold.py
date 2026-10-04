@@ -19,6 +19,7 @@ from deltakit_explorer.types import (
     Decoder,
     SI1000NoiseModel,
 )
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def get_error_bar(lep: float, num_shots: int) -> float:
     Returns:
         The estimated standard error.
     """
-    if lep == 0:
+    if math.isclose(lep, 0.0, abs_tol=1e-9):
         return 0.0
     return math.sqrt((lep * (1.0 - lep)) / num_shots)
 
@@ -47,9 +48,17 @@ def finite_size_scaling_drift(d: float, p_th: float, C: float, omega: float) -> 
     Wang, C., Harrington, J., & Preskill, J. (2003).
     "Confinement-Higgs transition in a disordered gauge theory and the accuracy threshold for quantum memory."
     arXiv:quant-ph/0207088v2
+
+    Args:
+        d: The code distance.
+        p_th: The asymptotic physical threshold error rate.
+        C: A scaling constant.
+        omega: The finite-size scaling exponent.
+
+    Returns:
+        The calculated physical error rate crossing point for the given distance.
     """
     return p_th + C * (d ** -omega)
-
 
 class ThresholdEstimator:
     """Estimates the quantum error correction threshold using bisection search.
@@ -63,16 +72,16 @@ class ThresholdEstimator:
         noise_model_class: Noise model class to use.
         decoder: Decoder to use. If None, MWPM is used.
     """
-
     def __init__(
         self,
         min_p: float = 0.001,
         max_p: float = 0.05,
         precision: float = 0.0001,
         num_shots: int = 100_000,
-        code_class=RotatedPlanarCode,
-        noise_model_class=SI1000NoiseModel,
-        decoder=None,
+        code_class: type = RotatedPlanarCode,
+        noise_model_class: type = SI1000NoiseModel,
+        decoder: Decoder | None = None,
+        experiment_builder: Callable | None = None,
     ):
         self.min_p = min_p
         self.max_p = max_p
@@ -84,6 +93,15 @@ class ThresholdEstimator:
             decoder if decoder is not None else Decoder(decoder_type=DecoderType.MWPM)
         )
         self.history_data = {}
+        
+        # Default to the CSS memory circuit if no custom builder is provided
+        self.experiment_builder = experiment_builder or (
+            lambda code, distance: css_code_memory_circuit(
+                code,
+                num_rounds=distance,
+                logical_basis=PauliBasis.Z,
+            )
+        )
 
     def run_simulation(self, p_value: float, distance: int, shots: int):
         """Executes a quantum memory circuit simulation under a specific physical error rate.
@@ -100,29 +118,20 @@ class ThresholdEstimator:
             The measured logical error probability (lep).
         """
         code = self.code_class(width=distance, height=distance)
-        compiled_circuit = css_code_memory_circuit(
-            code,
-            num_rounds=distance,
-            logical_basis=PauliBasis.Z,
-        )
+        compiled_circuit = self.experiment_builder(code, distance)
 
-        try:
-            noise_model = self.noise_model_class(p=p_value, p_l=0.0)
-        except TypeError:
-            noise_model = self.noise_model_class(p=p_value)
+        noise_model = self.noise_model_class(p=p_value)
 
         qpu = QPU(qubits=compiled_circuit.qubits, noise_model=noise_model)
         noisy_circuit = qpu.compile_and_add_noise_to_circuit(
             compiled_circuit
         ).as_stim_circuit()
 
-        pure_stim_circuit = deltakit_stim.Circuit(str(noisy_circuit))
-
-        detectors, observables = pure_stim_circuit.compile_detector_sampler().sample(
+        detectors, observables = noisy_circuit.compile_detector_sampler().sample(
             shots=shots, separate_observables=True
         )
 
-        error_model = pure_stim_circuit.detector_error_model(decompose_errors=True)
+        error_model = noisy_circuit.detector_error_model(decompose_errors=True)
 
         if self.decoder.decoder_type == DecoderType.MWPM:
             matching = pymatching.Matching.from_detector_error_model(error_model)

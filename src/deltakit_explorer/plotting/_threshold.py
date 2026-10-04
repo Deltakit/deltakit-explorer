@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -13,13 +12,6 @@ from matplotlib.figure import Figure
 
 from deltakit_explorer.enums._basic_enums import THRESHOLD_DISTANCE_COLORS
 
-if sys.platform == "darwin":
-    try:
-        mpl.use("MacOSX")
-    except Exception:
-        mpl.use("Agg")
-else:
-    mpl.use("Agg")
 
 logger = logging.getLogger(__name__)
 

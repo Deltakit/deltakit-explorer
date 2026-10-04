@@ -6,7 +6,8 @@ from deltakit_explorer.codes._bivariate_bicycle_code import Monomial, Polynomial
 
 
 class TestPolynomial:
-    def test_Polynomial_init_works_as_expected(self):
+    def test_Polynomial_from_vec_works_as_expected(self, vec, l, m, exp_poly) -> None:  # noqa: E741
+
         assert Polynomial([Monomial(1, 2, 3, 3)]).monomials == [Monomial(1, 2, 3, 3)]
 
     @pytest.mark.parametrize(

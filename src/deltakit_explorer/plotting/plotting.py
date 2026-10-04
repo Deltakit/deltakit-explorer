@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-
+from dataclasses import dataclass
 from deltakit_explorer.analysis import LambdaData
 from deltakit_explorer.analysis import LogicalErrorProbabilityPerRoundData as LEPPRData
 from deltakit_explorer.plotting._lambda import plot_lambda
@@ -13,16 +13,21 @@ from deltakit_explorer.plotting._leppr import plot_leppr
 from deltakit_explorer.plotting._threshold import plot_threshold
 from deltakit_explorer.plotting.results import interpolate_lambda, interpolate_leppr
 
+@dataclass
+class ThresholdData:
+    """Container for threshold estimation plotting data."""
+    history_data: dict[int, tuple[list[float], list[float], list[float]]]
+    estimated_threshold: float
+    threshold_error: float
 
 def plot(
-    result: LambdaData | LEPPRData | dict,
+    result: LambdaData | LEPPRData | ThresholdData,
     *,
     num_sigmas: int = 3,
     num_points: int = 200,
     fig: Figure | None = None,
     ax: Axes | None = None,
     title: str | None = None,
-    **kwargs,
 ) -> tuple[Figure, Axes]:
     """Interpolate raw analysis data and dispatch to the specialised plotter.
 
@@ -31,7 +36,7 @@ def plot(
     specialised renderer for its type.
 
     Args:
-        result: Raw Lambda, logical error probability per round data, or threshold dictionary.
+        result: Raw Lambda, logical error probability per round data, or threshold data.
         num_sigmas: Number of standard deviations for the error band. Default 3.
         num_points: Number of interpolation points. Default 200.
         fig: An existing matplotlib Figure. If None, a new figure will be
@@ -40,15 +45,12 @@ def plot(
             the specialised plotting function. Default is None.
         title: An optional custom title for the plot. If None, a default title
             based on the result type will be used.
-        **kwargs: Additional keyword arguments for specific plotters (e.g.,
-            `estimated_threshold` and `threshold_error` for threshold plots).
 
     Returns:
         The matplotlib Figure and Axes objects containing the plot.
 
     Raises:
         TypeError: If the ``result`` type is not supported.
-        ValueError: If required kwargs are missing for a specific plot type.
 
     Examples:
 
@@ -58,11 +60,12 @@ def plot(
 
         Plotting threshold data::
 
-            fig, ax = plot(
-                threshold_dict,
+            threshold_data = ThresholdData(
+                history_data=threshold_dict,
                 estimated_threshold=0.01,
                 threshold_error=0.0005
             )
+            fig, ax = plot(threshold_data)
 
     """
     match result:
@@ -78,16 +81,11 @@ def plot(
             )
             return plot_leppr(leppr_result, fig=fig, ax=ax, title=title)
 
-        case dict():
-            if "estimated_threshold" not in kwargs:
-                msg = "You must provide 'estimated_threshold' in kwargs when plotting threshold data."
-                raise ValueError(
-                    msg
-                )
+        case ThresholdData():
             return plot_threshold(
-                data_dict=result,
-                estimated_threshold=kwargs["estimated_threshold"],
-                threshold_error=kwargs.get("threshold_error", 0.0005),
+                data_dict=result.history_data,
+                estimated_threshold=result.estimated_threshold,
+                threshold_error=result.threshold_error,
                 fig=fig,
                 ax=ax,
                 title=title,
@@ -96,6 +94,6 @@ def plot(
         case _:
             msg = (
                 f"Unsupported result type: {type(result).__name__}. "
-                "Expected `LambdaData`, `LogicalErrorProbabilityPerRoundData`, or `dict`."
+                "Expected `LambdaData`, `LogicalErrorProbabilityPerRoundData`, or `ThresholdData`."
             )
             raise TypeError(msg)
