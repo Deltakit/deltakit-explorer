@@ -259,3 +259,19 @@ class TestCalculateLepScalarInputs:
     def test_non_positive_scalar_raises(self) -> None:
         with pytest.raises(ValueError, match="must be strictly positive"):
             calculate_lep_and_lep_stddev(fails=0, shots=100000)
+
+
+class TestComputeLeppScalarInputs:
+    """Raw output of ``calculate_lep_and_lep_stddev`` feeds ``compute_logical_error_per_round``."""
+
+    def test_scalar_lep_round_trip(self) -> None:
+        lep, lep_stddev = calculate_lep_and_lep_stddev(456, 10_000)
+        res = compute_logical_error_per_round([10], lep, lep_stddev)
+        expected = compute_logical_error_per_round([10], [lep], [lep_stddev])
+        np.testing.assert_allclose(res.leppr, expected.leppr)
+        np.testing.assert_allclose(res.leppr_stddev, expected.leppr_stddev)
+
+    def test_all_scalars(self) -> None:
+        res = compute_logical_error_per_round(10, 0.0456, 0.002)
+        expected = compute_logical_error_per_round([10], [0.0456], [0.002])
+        np.testing.assert_allclose(res.leppr, expected.leppr)
