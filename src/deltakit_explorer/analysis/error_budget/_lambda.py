@@ -109,20 +109,18 @@ def inverse_lambda_at(
         checks and optimisations.
 
     Args:
-        noise_model (Callable[[Circuit, npt.NDArray[np.floating]], Circuit]): a callable
-            adding noise to the provided circuit, according to the parameters provided.
-        noise_parameters (npt.NDArray[numpy.floating] | Sequence[float]): valid
-            parameters to forward to ``noise_model`` representing the point at which the
-            gradient should be computed.
-        num_rounds_by_distances (Mapping[int, Sequence[int]]): a mapping from each code
-            distance that should be tested to the number of rounds that should be
-            sampled in order to estimate the logical error-probability per round, to
-            ultimately get 1 / Λ.
+        noise_model: a callable adding noise to the provided circuit, according to the
+            parameters provided.
+        noise_parameters: valid parameters to forward to ``noise_model`` representing
+            the point at which the gradient should be computed.
+        num_rounds_by_distances: a mapping from each code distance that should be tested
+            to the number of rounds that should be sampled in order to estimate the
+            logical error-probability per round, to ultimately get 1 / Λ.
         sampling_parameters: additional parameters relating to the sampling tasks used to
             estimate 1 / Λ indirectly.
-        memory_generator (MemoryGenerator): a callable that can generate a memory
-            experiment. The resulting circuit will go through the provided
-            ``noise_model`` for different values of the noise parameters.
+        memory_generator: a callable that can generate a memory experiment. The
+            resulting circuit will go through the provided ``noise_model`` for different
+            values of the noise parameters.
 
     Returns:
         A :class:`ConfidenceInterval` for 1 / Λ. Its bounds are the symmetric
