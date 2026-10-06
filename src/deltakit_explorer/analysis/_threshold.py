@@ -36,7 +36,13 @@ def _consecutive_crossings(
 ) -> tuple[float, ...]:
     """Return the first crossing (if any) of each pair of consecutive-distance curves.
 
-    ``y[i]`` is the curve of the ``i``-th distance and ``p`` is sorted increasingly.
+    Args:
+        p: physical error rates, sorted increasingly.
+        y: logical error rates of shape ``(n_distances, len(p))``, sorted by distance.
+
+    Returns:
+        the physical error rate of the first crossing of each pair of consecutive
+        distances that cross.
     """
     crossings = []
     for lo, hi in pairwise(y):
