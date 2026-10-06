@@ -116,9 +116,9 @@ class LogicalErrorProbabilityPerRoundData:
 def compute_logical_error_per_round(
     num_rounds: npt.NDArray[np.int_] | Sequence[int] | int,
     logical_error_probabilities: npt.NDArray[np.floating] | Sequence[float] | float,
-    logical_error_probabilities_stddev: npt.NDArray[np.floating]
-    | Sequence[float]
-    | float,
+    logical_error_probabilities_stddev: (
+        npt.NDArray[np.floating] | Sequence[float] | float
+    ),
     *,
     force_include_single_round: bool = False,
 ) -> LogicalErrorProbabilityPerRoundData:
