@@ -16,8 +16,9 @@ class PreComputedMemoryGenerator(MemoryGenerator):
     """A memory generator that uses pre-computed circuits.
 
     Args:
-        circuits: a mapping from distance values to another mapping that maps num_rounds values
-            to actual quantum circuits. Will be used as ``circuits[distance][num_rounds]``.
+        circuits: a mapping from distance values to another mapping that maps num_rounds
+            values to actual quantum circuits. Will be used as
+            ``circuits[distance][num_rounds]``.
     """
 
     def __init__(self, circuits: Mapping[int, Mapping[int, Circuit]]) -> None:

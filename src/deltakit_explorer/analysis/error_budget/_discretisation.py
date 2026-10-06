@@ -38,10 +38,8 @@ class GradientFitDiscretisationGenerator(Protocol):
         Implementations should raise a ``ValueError`` if ``a < c < b`` is not verified.
 
         Args:
-            a: lower bound of the interval in which fitting points should be
-                computed.
-            b: upper bound of the interval in which fitting points should be
-                computed.
+            a: lower bound of the interval in which fitting points should be computed.
+            b: upper bound of the interval in which fitting points should be computed.
             c: point at which the gradient will be estimated.
             num_points: number of points to return within ``[a, b]``.
             degree: degree of the polynomial that will be used to fit the values
