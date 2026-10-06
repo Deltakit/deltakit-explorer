@@ -44,23 +44,23 @@ class ErrorBudgetResult:
     @staticmethod
     def from_gradient(
         gradient: npt.NDArray[np.floating],
-        gradient_stddevs: npt.NDArray[np.floating],
+        gradient_stddev: npt.NDArray[np.floating],
         noise_parameters: npt.NDArray[np.floating],
     ) -> ErrorBudgetResult:
         """Create an instance from gradient and noise parameters.
 
         Args:
             gradient: gradient of 1 / Λ with respect to each noise parameter.
-            gradient_stddevs: standard deviation of each entry in ``gradient``.
+            gradient_stddev: standard deviation of each entry in ``gradient``.
             noise_parameters: noise parameters the contributions are computed for.
 
         Returns:
             an error-budget result whose contributions are ``|gradient *
             noise_parameters|`` and whose standard deviations are
-            ``|gradient_stddevs * noise_parameters|``.
+            ``|gradient_stddev * noise_parameters|``.
         """
         contributions = np.abs(gradient * noise_parameters)
-        stddevs = np.abs(gradient_stddevs * noise_parameters)
+        stddevs = np.abs(gradient_stddev * noise_parameters)
         return ErrorBudgetResult(
             tuple(map(float, contributions.ravel())), tuple(map(float, stddevs.ravel()))
         )
