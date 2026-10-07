@@ -40,9 +40,9 @@ dependencies = [
   "graphql_core >=3.2.11, <4",
   # capped at 2.5 because 2.5.0 removed row_stack which is used by numba, which is
   # used by galois, and neither of these have handled this error themselves.
-  "numpy >=2.0, <2.5",
-  "numpy >=2.3.2, <2.5; python_version >= '3.14'",
-  "numpy >=2.5.2, <2.5; python_version >= '3.15'",
+  "numpy >=2.0, <3",
+  "numpy >=2.3.2, <3; python_version >= '3.14'",
+  "numpy >=2.5.2, <3; python_version >= '3.15'",
   "scipy >=1.15.3, <2",
   "scipy >=1.16.2, <2; python_version >= '3.14'",
   "scipy >=1.18.1, <2; python_version >= '3.15'",
