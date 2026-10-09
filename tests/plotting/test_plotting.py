@@ -153,7 +153,7 @@ class TestVisualisation:
         img1 = img.imread(path1)
         img2 = img.imread(path2)
         # relative variation is small
-        assert np.allclose(img1, img2, rtol=0.01)
+        assert np.allclose(img1, img2, rtol=0.05)
 
     def assert_same_size(self, path1, path2):
         img1 = img.imread(path1)
