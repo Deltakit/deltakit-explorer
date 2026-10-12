@@ -35,23 +35,20 @@ class GradientFitDiscretisationGenerator(Protocol):
           a D-optimal design (sees
           https://en.wikipedia.org/wiki/Optimal_experimental_design).
 
+        Implementations should raise a ``ValueError`` if ``a < c < b`` is not verified.
+
         Args:
-            a (float): lower bound of the interval in which fitting points should be
-                computed.
-            b (float): upper bound of the interval in which fitting points should be
-                computed.
-            c (float): point at which the gradient will be estimated.
-            num_points (int): number of points to return within ``[a, b]``.
-            degree (int): degree of the polynomial that will be used to fit the values
+            a: lower bound of the interval in which fitting points should be computed.
+            b: upper bound of the interval in which fitting points should be computed.
+            c: point at which the gradient will be estimated.
+            num_points: number of points to return within ``[a, b]``.
+            degree: degree of the polynomial that will be used to fit the values
                 computed at each of the points returned by this function.
 
         Returns:
             a sorted array of ``num_points`` points within ``[a, b]`` and without duplicates
             that should be used to evaluate the function to fit with a degree ``degree``
             polynomial.
-
-        Raises:
-            ValueError: if ``a < c < b`` is not verified.
         """
         ...
 
@@ -65,7 +62,17 @@ def _check_interval(a: float, b: float, c: float) -> None:
 def get_linear_points(
     a: float, b: float, c: float, num_points: int, _: int
 ) -> npt.NDArray[np.floating]:
-    """Returns ``num_points`` linearly spaced between ``a`` and ``b``."""
+    """Returns ``num_points`` linearly spaced between ``a`` and ``b``.
+
+    Args:
+        a: lower bound of the interval.
+        b: upper bound of the interval.
+        c: point at which the gradient will be estimated.
+        num_points: number of points to return within ``[a, b]``.
+
+    Returns:
+        ``num_points`` linearly spaced points from ``a`` to ``b``, both included.
+    """
     _check_interval(a, b, c)
     return np.linspace(a, b, num_points)
 
@@ -73,7 +80,21 @@ def get_linear_points(
 def get_logarithmic_points(
     a: float, b: float, c: float, num_points: int, _: int
 ) -> npt.NDArray[np.floating]:
-    """Returns ``num_points`` logarithmically spaced between ``a`` and ``b``."""
+    """Returns ``num_points`` logarithmically spaced between ``a`` and ``b``.
+
+    Args:
+        a: lower bound of the interval. Must be strictly positive.
+        b: upper bound of the interval.
+        c: point at which the gradient will be estimated.
+        num_points: number of points to return within ``[a, b]``.
+
+    Returns:
+        ``num_points`` logarithmically spaced points from ``a`` to ``b``, both
+        included.
+
+    Raises:
+        ValueError: if ``a < c < b`` is not verified or if ``a <= 0``.
+    """
     _check_interval(a, b, c)
     if a <= 0:
         msg = (

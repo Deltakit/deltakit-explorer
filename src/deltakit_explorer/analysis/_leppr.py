@@ -114,9 +114,11 @@ class LogicalErrorProbabilityPerRoundData:
 
 
 def compute_logical_error_per_round(
-    num_rounds: npt.NDArray[np.int_] | Sequence[int],
-    logical_error_probabilities: npt.NDArray[np.floating] | Sequence[float],
-    logical_error_probabilities_stddev: npt.NDArray[np.floating] | Sequence[float],
+    num_rounds: npt.NDArray[np.int_] | Sequence[int] | int,
+    logical_error_probabilities: npt.NDArray[np.floating] | Sequence[float] | float,
+    logical_error_probabilities_stddev: (
+        npt.NDArray[np.floating] | Sequence[float] | float
+    ),
     *,
     force_include_single_round: bool = False,
 ) -> LogicalErrorProbabilityPerRoundData:
@@ -181,12 +183,15 @@ def compute_logical_error_per_round(
     """
     # Get the inputs as numpy arrays.
     # Sanitisation: also make sure that the inputs are sorted.
+    # Scalars (e.g. the floats returned by ``calculate_lep_and_lep_stddev`` for scalar
+    # inputs) are treated as length-1 arrays.
+    num_rounds = np.atleast_1d(num_rounds)
     isort = np.argsort(num_rounds)
-    num_rounds = np.asarray(num_rounds)[isort]
-    logical_error_probabilities = np.asarray(logical_error_probabilities)[isort]
-    logical_error_probabilities_stddev = np.asarray(logical_error_probabilities_stddev)[
-        isort
-    ]
+    num_rounds = num_rounds[isort]
+    logical_error_probabilities = np.atleast_1d(logical_error_probabilities)[isort]
+    logical_error_probabilities_stddev = np.atleast_1d(
+        logical_error_probabilities_stddev
+    )[isort]
 
     # Check that we do not have duplicate data for the same number of rounds as that
     # will confuse the numerical methods used in this function.

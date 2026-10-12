@@ -1,7 +1,7 @@
 # (c) Copyright Riverlane 2020-2026. All rights reserved.
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import matplotlib.pyplot as plt
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from deltakit_explorer.codes._stabiliser import Stabiliser
 
 
-class DetectionProbabilityAggregation(str, Enum):
+class DetectionProbabilityAggregation(StrEnum):
     MEAN = "mean"
     MEDIAN = "median"
     VARIANCE = "variance"
