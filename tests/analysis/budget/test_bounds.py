@@ -133,6 +133,63 @@ def test_failed_discovery_prevents_production_and_retains_evidence(
     assert pilot == [0.01]
 
 
+def test_reversed_inverse_lambda_trend_is_rejected(monkeypatch):
+    """Reject Filma1's significant decrease in inverse-Lambda as noise increases."""
+    calls = []
+
+    def sample(_model, parameters, rounds, sampling, _memory):
+        x = float(parameters[0])
+        calls.append(x)
+        rows = []
+
+        # Keep d=3 fixed while d=5 improves with x, reversing the expected trend.
+        for d, rs in rounds.items():
+            rate = 0.03 if d == 3 else 0.03 * (0.55 - 15 * x)
+            for r in rs:
+                lep = (1 - (1 - 2 * rate) ** r) / 2
+                rows.append(
+                    (d, r, round(lep * sampling.max_shots), sampling.max_shots, x)
+                )
+
+        return (
+            np.array([[x]]),
+            ["0"],
+            pd.DataFrame(
+                rows, columns=["distance", "num_rounds", "fails", "shots", "noise_0"]
+            ),
+        )
+
+    monkeypatch.setattr(_lambda, "_run_lambda_engine", sample)
+    result = find_error_budget_bounds(
+        Mock(),
+        0.005,
+        ROUNDS,
+        search_parameters=BoundSearchParameters(
+            [(0, 0.05)], shots_per_trial=100_000, sensitivity_z_score=1.0
+        ),
+    )
+
+    estimates = (
+        result.pilot_data[["noise_0", "inverse_lambda", "inverse_lambda_stddev"]]
+        .drop_duplicates()
+        .dropna()
+        .sort_values("noise_0")
+    )
+    assert len(estimates) == len(calls) == 5
+    initial_low, initial_high = estimates.iloc[1], estimates.iloc[-2]
+    assert 0 < initial_low.inverse_lambda - initial_high.inverse_lambda < np.hypot(
+        initial_low.inverse_lambda_stddev, initial_high.inverse_lambda_stddev
+    )
+    low, high = estimates.iloc[0], estimates.iloc[-1]
+    assert high.inverse_lambda < low.inverse_lambda
+    assert low.inverse_lambda - high.inverse_lambda > np.hypot(
+        low.inverse_lambda_stddev, high.inverse_lambda_stddev
+    )
+    assert result.bounds is None
+    assert "decreases significantly" in result.failure_reason
+    assert "increasing physical noise strength" in str(BoundsDiscoveryError(result))
+
+
 def test_explicit_bounds_bypass_pilots(pilot, monkeypatch):
     monkeypatch.setattr(
         _budget,

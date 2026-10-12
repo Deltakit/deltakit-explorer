@@ -110,6 +110,8 @@ def get_error_budget(
             shots (resp. below ``1 / 2`` to ensure that we can compute the logical error
             probability per round). Pass None to discover bounds one axis at a time,
             holding the other parameters fixed at the gradient evaluation point.
+            Automatic bounds require increasing parameters to increase physical
+            noise strength.
         fitting_parameters: additional parameters relating to how the gradient is
             estimated.
         sampling_parameters: additional parameters relating to the sampling tasks used to

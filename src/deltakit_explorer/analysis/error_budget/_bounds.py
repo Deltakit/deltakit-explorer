@@ -79,10 +79,12 @@ class BoundsSearchResult:
         pilot_data: All raw circuit counts, including unusable probes. Columns
             inverse_lambda and inverse_lambda_stddev retain available estimates;
             NaN denotes an unusable point. noise_0 is the varied scalar parameter.
+        failure_reason: Explanation of an unresolved search, if available.
     """
 
     bounds: tuple[float, float] | None
     pilot_data: pd.DataFrame
+    failure_reason: str | None = None
 
 
 class BoundsDiscoveryError(RuntimeError):
@@ -94,7 +96,8 @@ class BoundsDiscoveryError(RuntimeError):
 
     def __init__(self, result: BoundsSearchResult) -> None:
         super().__init__(
-            "No usable bounds found; inspect result.pilot_data, increase pilot shots, or supply explicit bounds."
+            result.failure_reason
+            or "No usable bounds found; inspect result.pilot_data, increase pilot shots, or supply explicit bounds."
         )
         self.result = result
 
@@ -123,6 +126,8 @@ def find_error_budget_bounds(
     when a probe violates the count or LEP limits. Probes are cached by exact
     value. This assumes a connected feasible interval around the centre.
     Endpoint SNR is a proxy for gradient precision, not a guarantee about fit bias.
+    Increasing the parameter must increase physical noise strength. A significant
+    decrease in inverse-Lambda stops discovery with unresolved bounds.
 
     Args:
         noise_model: Callable adding noise using one scalar parameter.
@@ -183,8 +188,10 @@ def find_error_budget_bounds(
         sampling_parameters, max_shots=search.shots_per_trial, lep_target_rse=0.0
     )
     cache, reports = {}, []
+    failure_reason = None
 
     def probe(value):
+        nonlocal failure_reason
         if value not in cache:
             _, _, report = _lambda._run_lambda_engine(
                 partial(_scalar_noise, noise_model),
@@ -197,6 +204,21 @@ def find_error_budget_bounds(
             reports.append(report)
             cache[value] = None
             counts = report.groupby(["distance", "num_rounds"]).sum(numeric_only=True)
+            for (distance, num_rounds), row in counts.iterrows():
+                constraint = None
+                if row.fails < search.min_logical_failures:
+                    constraint = f"below min_logical_failures={search.min_logical_failures}"
+                elif row.fails / row.shots >= search.max_lep:
+                    constraint = f"LEP at or above max_lep={search.max_lep}"
+                if constraint is not None:
+                    failure_reason = (
+                        f"Pilot probe at p={value:g} was infeasible: "
+                        f"distance={distance}, num_rounds={num_rounds} produced "
+                        f"{row.fails:g} logical failures after {row.shots:g} shots; "
+                        f"{constraint}. Inspect result.pilot_data, increase pilot "
+                        "shots, or supply explicit bounds."
+                    )
+                    break
             if (
                 set(counts.index) == required
                 and (counts.shots == search.shots_per_trial).all()
@@ -235,9 +257,18 @@ def find_error_budget_bounds(
                     feasible[side] = value
             if feasible[0] < center < feasible[1]:
                 low, high = (cache[x] for x in feasible)
-                if abs(high[0] - low[0]) >= search.sensitivity_z_score * np.hypot(
+                separation = high[0] - low[0]
+                threshold = search.sensitivity_z_score * np.hypot(
                     low[1], high[1]
-                ):
+                )
+                if separation < -threshold:
+                    failure_reason = (
+                        "Inverse-Lambda decreases significantly as the parameter "
+                        "increases; automatic bounds require increasing physical "
+                        "noise strength."
+                    )
+                    break
+                if separation >= threshold:
                     bounds = tuple(feasible)
                     break
             for side in range(2):
@@ -249,4 +280,8 @@ def find_error_budget_bounds(
                 candidates[side] = (
                     feasible[side] / 2 if logarithmic and value <= 0 else float(value)
                 )
-    return BoundsSearchResult(bounds, pd.concat(reports, ignore_index=True))
+    return BoundsSearchResult(
+        bounds,
+        pd.concat(reports, ignore_index=True),
+        failure_reason if bounds is None else None,
+    )
