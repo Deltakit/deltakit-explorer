@@ -30,6 +30,10 @@ from deltakit_explorer.analysis._quops import (
     predict_quops_at_distance,
     predict_quops_interval,
 )
+from deltakit_explorer.analysis._threshold import (
+    ThresholdData,
+    estimate_threshold,
+)
 
 from . import error_budget
 
