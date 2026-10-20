@@ -49,15 +49,17 @@ def test_logarithmic_points(
 
 @pytest.mark.parametrize(
     ("func", "abc"),
-    itertools.product(
-        [get_linear_points, get_logarithmic_points, get_c_optimal_points],
-        [
-            (1.0, 2.0, 3.0),  # a < b < c
-            (2.0, 1.0, 3.0),  # b < a < c
-            (3.0, 1.0, 2.0),  # b < c < a
-            (2.0, 3.0, 1.0),  # c < a < b
-            (3.0, 2.0, 1.0),  # c < b < a
-        ],
+    list(
+        itertools.product(
+            [get_linear_points, get_logarithmic_points, get_c_optimal_points],
+            [
+                (1.0, 2.0, 3.0),  # a < b < c
+                (2.0, 1.0, 3.0),  # b < a < c
+                (3.0, 1.0, 2.0),  # b < c < a
+                (2.0, 3.0, 1.0),  # c < a < b
+                (3.0, 2.0, 1.0),  # c < b < a
+            ],
+        ),
     ),
 )
 def test_raises_on_invalid_inputs(
