@@ -92,6 +92,8 @@ def test_bivariate_bicycle_compute_bb_structured_logicals_keeps_pure_f_classes(
 
 
 class TestPolynomial:
+    def test_Polynomial_from_vec_works_as_expected(self, vec, l, m, exp_poly) -> None:  # noqa: E741
+
     def test_Polynomial_init_works_as_expected(self) -> None:
         assert Polynomial([Monomial(1, 2, 3, 3)]).monomials == [Monomial(1, 2, 3, 3)]
 
