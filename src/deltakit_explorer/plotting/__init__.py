@@ -12,6 +12,7 @@ from deltakit_explorer.plotting._detection_on_patch import (
 )
 from deltakit_explorer.plotting._lambda import plot_lambda
 from deltakit_explorer.plotting._leppr import plot_leppr
+from deltakit_explorer.plotting._threshold import plot_threshold
 from deltakit_explorer.plotting.plotting import plot
 from deltakit_explorer.plotting.results import (
     LambdaResult,
