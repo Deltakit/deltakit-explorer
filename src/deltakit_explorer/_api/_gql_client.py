@@ -71,7 +71,7 @@ class GQLClient(APIClient):
         Examples:
             This is how an instance of the child class is created::
 
-                client = Client(base_url="http://deltakit.rivelane.com/proxy")
+                client = Client(base_url="http://deltakit.riverlane.com/proxy")
 
         """
         super().__init__(base_url, request_timeout)
