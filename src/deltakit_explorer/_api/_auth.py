@@ -11,7 +11,7 @@ TOKEN_VARIABLE = "DELTAKIT_TOKEN"  # nosec B105
 TLS_DISABLE_CHECK_VARIABLE = "DELTAKIT_DISABLE_TLS_CHECK"
 # pylint: disable=fixme
 # TODO: domain name for QEC portal.
-RIVERLANE_PORTAL = "https://deltakit.rivelane.com/dashboard/token"
+RIVERLANE_PORTAL = "https://deltakit.riverlane.com/dashboard/token"
 
 
 def get_token() -> str:
