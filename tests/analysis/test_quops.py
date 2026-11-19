@@ -61,6 +61,12 @@ def test_predict_distance_for_quops_method_when_lambda_too_small(
         predict_distance_for_quops(0.001, lambda_, 10)
 
 
+def test_predict_distance_for_quops_includes_max_distance():
+    # Distance 11 is the smallest odd distance that reaches 5800 QuOps, so the
+    # search must also test max_distance itself.
+    assert predict_distance_for_quops(1.0e-3, 2.0, 5800, max_distance=11) == 11
+
+
 def test_predict_distance_for_quops_method_raises_when_quops_too_big():
     # Create a system that has a lambda very close to threshold and try and reach
     # a large number of QuOps with this.
