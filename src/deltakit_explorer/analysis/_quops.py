@@ -39,7 +39,7 @@ def _equal_or_less_brute_force_search(
         int | None:
             a value, which safisfies the search, or None.
     """
-    while minimum < maximum:
+    while minimum <= maximum:
         value = func(minimum)
         if value <= target:
             return minimum
