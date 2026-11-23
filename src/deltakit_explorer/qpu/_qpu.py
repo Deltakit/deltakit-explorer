@@ -17,6 +17,9 @@ from deltakit_explorer.qpu._circuits import (
     compile_circuit_to_native_gates,
     remove_identities,
 )
+from deltakit_explorer.qpu._circuits import (
+    remove_dead_unitaries as _remove_dead_unitaries,
+)
 from deltakit_explorer.qpu._native_gate_set import (
     ExhaustiveGateSet,
     NativeGateSetAndTimes,
@@ -319,6 +322,7 @@ class QPU:
         self,
         circuit: Circuit,
         remove_paulis: bool = True,
+        remove_dead_unitaries: bool = False,
     ) -> Circuit:
         """
         Compile the supplied circuit so that it uses the QPU's native gates.
@@ -331,20 +335,28 @@ class QPU:
             Whether to remove Pauli gates from the circuit. This should be set
             to False if, for example, there is a desire to prepare a specific
             initial state which requires Pauli gates. By default, True.
+        remove_dead_unitaries : bool, optional
+            Whether to remove single-qubit gates whose effect no later operation
+            can observe, such as the basis change left after a measurement in a
+            non-native basis. By default, False.
 
         Returns
         -------
         Circuit
             Compiled circuit.
         """
-        return compile_circuit_to_native_gates(
+        compiled = compile_circuit_to_native_gates(
             circuit, self.native_gates_and_times, up_to_paulis=remove_paulis
         )
+        if remove_dead_unitaries:
+            return _remove_dead_unitaries(compiled)
+        return compiled
 
     def compile_and_add_noise_to_circuit(
         self,
         circuit: Circuit,
         remove_paulis: bool = True,
+        remove_dead_unitaries: bool = False,
     ) -> Circuit:
         """
         Compile the supplied circuit so that it uses the QPU's native gates
@@ -358,6 +370,9 @@ class QPU:
             Whether to remove Pauli gates from the circuit. This should be set
             to False if, for example, there is a desire to prepare a specific
             initial state which requires Pauli gates. By default, True.
+        remove_dead_unitaries : bool, optional
+            Whether to remove single-qubit gates whose effect no later operation
+            can observe, before noise is added. By default, False.
 
         Returns
         -------
@@ -365,7 +380,9 @@ class QPU:
             Compiled circuit with noise added.
         """
         return remove_identities(
-            self.add_noise_to_circuit(self.compile_circuit(circuit, remove_paulis))
+            self.add_noise_to_circuit(
+                self.compile_circuit(circuit, remove_paulis, remove_dead_unitaries)
+            )
         )
 
     @staticmethod
@@ -375,6 +392,7 @@ class QPU:
         noise_model: NoiseParameters = NoiseParameters(),
         remove_paulis: bool = True,
         maximise_parallelism: bool = True,
+        remove_dead_unitaries: bool = False,
     ) -> Circuit:
         """
         Compile the supplied circuit with a given noise model on an unconstrained QPU
@@ -397,6 +415,9 @@ class QPU:
             Whether to do as many gates in parallel as possible (True) or only to
             perform gates in parallel if they are in the same GateLayer (False).
             By default, True.
+        remove_dead_unitaries : bool, optional
+            Whether to remove single-qubit gates whose effect no later operation
+            can observe, before noise is added. By default, False.
 
         Returns
         -------
@@ -412,4 +433,5 @@ class QPU:
         return qpu.compile_and_add_noise_to_circuit(
             circuit=circuit,
             remove_paulis=remove_paulis,
+            remove_dead_unitaries=remove_dead_unitaries,
         )

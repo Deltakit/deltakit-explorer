@@ -10,13 +10,31 @@ from deltakit_circuit import (
     Observable,
     ShiftCoordinates,
 )
-from deltakit_circuit.gates import CX, CZ, MZ, RZ, H, I, PauliBasis, S, X
+from deltakit_circuit.gates import (
+    CX,
+    CZ,
+    MRZ,
+    MX,
+    MZ,
+    RX,
+    RZ,
+    H,
+    I,
+    PauliBasis,
+    S,
+    X,
+    Z,
+)
 from deltakit_circuit.noise_channels import Depolarise2
 
+from deltakit_explorer.codes import RotatedPlanarCode, css_code_memory_circuit
+from deltakit_explorer.qpu import NativeGateSet
 from deltakit_explorer.qpu._circuits import (
+    compile_circuit_to_native_gates,
     merge_layers,
     parallelise_disjoint_circuits,
     parallelise_same_length_circuits,
+    remove_dead_unitaries,
     remove_identities,
 )
 
@@ -667,6 +685,128 @@ class TestRemoveIdentities:
     )
     def test_remove_identities(self, input_circuit, expected_output_circuit):
         assert remove_identities(input_circuit) == expected_output_circuit
+
+
+class TestRemoveDeadUnitaries:
+    @pytest.mark.parametrize(
+        ("input_circuit", "expected_output_circuit"),
+        [
+            # Basis change after a measurement, then a reset: dead.
+            (
+                Circuit([GateLayer(MX(0)), GateLayer(H(0)), GateLayer(RX(0))]),
+                Circuit([GateLayer(MX(0)), GateLayer(RX(0))]),
+            ),
+            # Basis change after the last measurement, nothing after it: dead.
+            (
+                Circuit([GateLayer(MX(0)), GateLayer(H(0))]),
+                Circuit([GateLayer(MX(0))]),
+            ),
+            # Read by a later measurement: kept.
+            (
+                Circuit([GateLayer(H(0)), GateLayer(MZ(0))]),
+                Circuit([GateLayer(H(0)), GateLayer(MZ(0))]),
+            ),
+            # A measure-and-reset reads the qubit before overwriting it: kept.
+            (
+                Circuit([GateLayer(H(0)), GateLayer(MRZ(0))]),
+                Circuit([GateLayer(H(0)), GateLayer(MRZ(0))]),
+            ),
+            # Read by a two-qubit gate whose other qubit is measured: kept.
+            (
+                Circuit([GateLayer(H(0)), GateLayer(CX(0, 1)), GateLayer(MZ(1))]),
+                Circuit([GateLayer(H(0)), GateLayer(CX(0, 1)), GateLayer(MZ(1))]),
+            ),
+            # Only the gate on the qubit that is not read goes, and the layer stays.
+            (
+                Circuit([GateLayer([H(0), H(1)]), GateLayer(MZ(1))]),
+                Circuit([GateLayer(H(1)), GateLayer(MZ(1))]),
+            ),
+            # Detectors refer to measurement records, not qubits: not a read.
+            (
+                Circuit(
+                    [
+                        GateLayer(MX(0)),
+                        GateLayer(H(0)),
+                        Detector([MeasurementRecord(-1)]),
+                    ]
+                ),
+                Circuit([GateLayer(MX(0)), Detector([MeasurementRecord(-1)])]),
+            ),
+            # A repeat block reads every qubit it acts on, and is not entered.
+            (
+                Circuit(
+                    [
+                        GateLayer(H(0)),
+                        Circuit([GateLayer(MZ(0)), GateLayer(H(0))], iterations=3),
+                    ]
+                ),
+                Circuit(
+                    [
+                        GateLayer(H(0)),
+                        Circuit([GateLayer(MZ(0)), GateLayer(H(0))], iterations=3),
+                    ]
+                ),
+            ),
+            # A repeated circuit's end flows into its start, so a trailing gate
+            # is read by the next iteration, but one before a reset is still dead.
+            (
+                Circuit(
+                    [
+                        GateLayer(MZ(0)),
+                        GateLayer(H(0)),
+                        GateLayer(RZ(0)),
+                        GateLayer(S(0)),
+                    ],
+                    iterations=2,
+                ),
+                Circuit(
+                    [GateLayer(MZ(0)), GateLayer(RZ(0)), GateLayer(S(0))],
+                    iterations=2,
+                ),
+            ),
+        ],
+    )
+    def test_remove_dead_unitaries(self, input_circuit, expected_output_circuit):
+        assert remove_dead_unitaries(input_circuit) == expected_output_circuit
+
+    def test_surface_code_keeps_its_flows(self):
+        # Rotated planar code, Z memory, compiled to a gate set where measurement and
+        # reset are only native in the X basis, so every round leaves a basis change
+        # behind. Equivalence is checked on the stabiliser flows of both circuits,
+        # with a reset on every qubit appended, since the final states of qubits that
+        # are never used again are discarded.
+        native_gates = NativeGateSet(
+            one_qubit_gates={X, Z, S, H},
+            two_qubit_gates={CX},
+            reset_gates={RX},
+            measurement_gates={MX},
+        )
+        compiled = compile_circuit_to_native_gates(
+            css_code_memory_circuit(
+                RotatedPlanarCode(width=3, height=3),
+                num_rounds=3,
+                logical_basis=PauliBasis.Z,
+            ),
+            native_gates,
+        )
+        simplified = remove_dead_unitaries(compiled)
+
+        def closed(circuit):
+            stim_circuit = circuit.as_stim_circuit().flattened()
+            stim_circuit.append("R", range(stim_circuit.num_qubits))
+            return stim_circuit
+
+        before, after = closed(compiled), closed(simplified)
+        assert len(after) < len(before)
+        assert after.has_all_flows(before.flow_generators())
+        assert before.has_all_flows(after.flow_generators())
+
+    def test_refuses_noisy_circuit(self):
+        circuit = Circuit(
+            [GateLayer(H(0)), NoiseLayer(Depolarise2(0, 1, 0.01)), GateLayer(RZ(0))]
+        )
+        with pytest.raises(ValueError, match="before noise is added"):
+            remove_dead_unitaries(circuit)
 
 
 class TestMergeLayers:

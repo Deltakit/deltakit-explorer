@@ -14,7 +14,7 @@ from deltakit_circuit import (
     Observable,
     ShiftCoordinates,
 )
-from deltakit_circuit.gates import I
+from deltakit_circuit.gates import I, OneQubitCliffordGate, OneQubitResetGate
 
 # According to the purpose and business logic, content of this file
 # may violate pylint rules on cyclomatic complexity. Still, code
@@ -211,3 +211,65 @@ def remove_identities(circuit: Circuit) -> Circuit:
             new_layers.append(layer)
 
     return Circuit(new_layers, iterations=circuit.iterations)
+
+
+def remove_dead_unitaries(circuit: Circuit) -> Circuit:
+    """
+    Remove single-qubit Clifford gates whose effect no later operation can
+    observe.
+
+    Compiling a measurement or a reset into a basis that is not native leaves a
+    basis change behind it. That gate is dead when, from that point to the end of
+    the circuit, no measurement, multi-qubit gate or repeat block uses its qubit
+    before the qubit is reset or the circuit ends. Such gates are removed. See
+    Deltakit/deltakit#286.
+
+    The circuit is walked backwards, keeping the set of qubits a later operation
+    still reads. A reset takes its qubit out of that set, since it overwrites the
+    state. Repeat blocks are not entered: every qubit they act on counts as read.
+    If the circuit itself repeats, its end flows back into its start, so every
+    qubit counts as read at the end. Gate layers left empty are dropped, as
+    `remove_identities` does.
+
+    Args:
+        circuit: Noiseless circuit from which to remove dead single-qubit gates.
+
+    Returns:
+        Circuit with the dead single-qubit gates removed.
+
+    Raises:
+        ValueError: If the circuit contains noise. A noise channel attached to a
+            removed gate would describe a gate that is no longer in the circuit,
+            so this must run before noise is added.
+    """
+    if circuit.is_noisy:
+        msg = (
+            "remove_dead_unitaries must run before noise is added: a noise channel "
+            "attached to a removed gate would describe a gate that is no longer in "
+            "the circuit."
+        )
+        raise ValueError(msg)
+
+    read = set(circuit.qubits) if circuit.iterations > 1 else set()
+    new_layers: list = []
+    for layer in reversed(circuit.layers):
+        if isinstance(layer, GateLayer):
+            kept = [
+                gate
+                for gate in layer.gates
+                if not isinstance(gate, OneQubitCliffordGate)
+                or not read.isdisjoint(gate.qubits)
+            ]
+            for gate in kept:
+                if isinstance(gate, OneQubitResetGate):
+                    read.difference_update(gate.qubits)
+                else:
+                    read.update(gate.qubits)
+            if kept:
+                new_layers.append(GateLayer(kept))
+        else:
+            if isinstance(layer, Circuit):
+                read.update(layer.qubits)
+            new_layers.append(layer)
+
+    return Circuit(list(reversed(new_layers)), iterations=circuit.iterations)
