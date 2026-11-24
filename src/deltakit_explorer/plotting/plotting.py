@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
@@ -10,11 +12,30 @@ from deltakit_explorer.analysis import LambdaData
 from deltakit_explorer.analysis import LogicalErrorProbabilityPerRoundData as LEPPRData
 from deltakit_explorer.plotting._lambda import plot_lambda
 from deltakit_explorer.plotting._leppr import plot_leppr
+from deltakit_explorer.plotting._threshold import plot_threshold
 from deltakit_explorer.plotting.results import interpolate_lambda, interpolate_leppr
 
 
+@dataclass
+class ThresholdData:
+    """Container for threshold estimation plotting data.
+
+    Attributes:
+        history_data: Mapping from code distance to a tuple of
+            (physical error rates, logical error probabilities, their errors).
+        crossing_points: Mapping from each (d_low, d_high) pair to the physical
+            error rate at which their logical error probabilities cross.
+        crossing_errors: Optional mapping from each (d_low, d_high) pair to the
+            uncertainty on its crossing point, drawn as a horizontal error bar.
+    """
+
+    history_data: dict[int, tuple[list[float], list[float], list[float]]]
+    crossing_points: dict[tuple[int, int], float]
+    crossing_errors: dict[tuple[int, int], float] | None = None
+
+
 def plot(
-    result: LambdaData | LEPPRData,
+    result: LambdaData | LEPPRData | ThresholdData,
     *,
     num_sigmas: int = 3,
     num_points: int = 200,
@@ -29,7 +50,7 @@ def plot(
     specialised renderer for its type.
 
     Args:
-        result: Raw Lambda or logical error probability per round data.
+        result: Raw Lambda, logical error probability per round data, or threshold data.
         num_sigmas: Number of standard deviations for the error band. Default 3.
         num_points: Number of interpolation points. Default 200.
         fig: An existing matplotlib Figure. If None, a new figure will be
@@ -51,9 +72,13 @@ def plot(
 
             fig, ax = plot(lambda_data)
 
-        Plotting raw logical error probability per round data::
+        Plotting threshold data::
 
-            fig, ax = plot(leppr_data)
+            threshold_data = ThresholdData(
+                history_data=threshold_dict,
+                crossing_points={(3, 5): 0.0038, (5, 7): 0.0041},
+            )
+            fig, ax = plot(threshold_data)
 
     """
     match result:
@@ -62,14 +87,26 @@ def plot(
                 result, num_sigmas=num_sigmas, num_points=num_points
             )
             return plot_lambda(lambda_result, fig=fig, ax=ax, title=title)
+
         case LEPPRData():
             leppr_result = interpolate_leppr(
                 result, num_sigmas=num_sigmas, num_points=num_points
             )
             return plot_leppr(leppr_result, fig=fig, ax=ax, title=title)
+
+        case ThresholdData():
+            return plot_threshold(
+                data_dict=result.history_data,
+                crossing_points=result.crossing_points,
+                crossing_errors=result.crossing_errors,
+                fig=fig,
+                ax=ax,
+                title=title,
+            )
+
         case _:
             msg = (
                 f"Unsupported result type: {type(result).__name__}. "
-                "Expected `LambdaData` or `LogicalErrorProbabilityPerRoundData`."
+                "Expected `LambdaData`, `LogicalErrorProbabilityPerRoundData`, or `ThresholdData`."
             )
             raise TypeError(msg)
