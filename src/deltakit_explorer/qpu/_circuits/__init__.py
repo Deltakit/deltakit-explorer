@@ -10,6 +10,7 @@ accordingly.
 
 from deltakit_explorer.qpu._circuits._circuit_functions import (
     merge_layers,
+    remove_dead_unitaries,
     remove_identities,
 )
 from deltakit_explorer.qpu._circuits._parallelise_circuits import (
