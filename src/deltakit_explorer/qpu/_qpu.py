@@ -336,9 +336,8 @@ class QPU:
             to False if, for example, there is a desire to prepare a specific
             initial state which requires Pauli gates. By default, True.
         remove_dead_unitaries : bool, optional
-            Whether to remove single-qubit gates whose effect no later operation
-            can observe, such as the basis change left after a measurement in a
-            non-native basis. By default, False.
+            Whether to remove dead single-qubit gates, such as the basis change
+            left after a measurement in a non-native basis. By default, False.
 
         Returns
         -------
@@ -371,8 +370,9 @@ class QPU:
             to False if, for example, there is a desire to prepare a specific
             initial state which requires Pauli gates. By default, True.
         remove_dead_unitaries : bool, optional
-            Whether to remove single-qubit gates whose effect no later operation
-            can observe, before noise is added. By default, False.
+            Whether to remove dead single-qubit gates before noise addition, such as
+            the basis change left after a measurement in a non-native basis. By
+            default, False.
 
         Returns
         -------
@@ -416,8 +416,9 @@ class QPU:
             perform gates in parallel if they are in the same GateLayer (False).
             By default, True.
         remove_dead_unitaries : bool, optional
-            Whether to remove single-qubit gates whose effect no later operation
-            can observe, before noise is added. By default, False.
+            Whether to remove dead single-qubit gates before noise addition, such as
+            the basis change left after a measurement in a non-native basis. By
+            default, False.
 
         Returns
         -------

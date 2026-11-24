@@ -214,22 +214,14 @@ def remove_identities(circuit: Circuit) -> Circuit:
 
 
 def remove_dead_unitaries(circuit: Circuit) -> Circuit:
-    """
-    Remove single-qubit Clifford gates whose effect no later operation can
-    observe.
+    """Remove dead single-qubit Clifford gates.
 
-    Compiling a measurement or a reset into a basis that is not native leaves a
-    basis change behind it. That gate is dead when, from that point to the end of
-    the circuit, no measurement, multi-qubit gate or repeat block uses its qubit
-    before the qubit is reset or the circuit ends. Such gates are removed. See
-    Deltakit/deltakit#286.
-
-    The circuit is walked backwards, keeping the set of qubits a later operation
-    still reads. A reset takes its qubit out of that set, since it overwrites the
-    state. Repeat blocks are not entered: every qubit they act on counts as read.
-    If the circuit itself repeats, its end flows back into its start, so every
-    qubit counts as read at the end. Gate layers left empty are dropped, as
-    `remove_identities` does.
+    When compiling a measurement in a different basis with `deltakit-explorer`, the
+    1-qubit basis-change Clifford gate necessary to change the measurement basis is
+    added both before and after the measurement. This might lead to 1-qubit Clifford
+    gates that are dead (i.e., they have no effect on the qubit state), either because
+    the qubit they are applied on is directly reset afterwards, or because they are at
+    the end of the circuit. Such gates are removed. See Deltakit/deltakit#286.
 
     Args:
         circuit: Noiseless circuit from which to remove dead single-qubit gates.
@@ -250,6 +242,12 @@ def remove_dead_unitaries(circuit: Circuit) -> Circuit:
         )
         raise ValueError(msg)
 
+    # Walk backwards, keeping the set of qubits a later operation still reads. A
+    # reset takes its qubit out of that set, since it overwrites the state. Repeat
+    # blocks are not entered: every qubit they act on counts as read. If the circuit
+    # itself repeats, its end flows back into its start, so every qubit counts as
+    # read at the end. Gate layers left empty are dropped, as `remove_identities`
+    # does.
     read = set(circuit.qubits) if circuit.iterations > 1 else set()
     new_layers: list = []
     for layer in reversed(circuit.layers):

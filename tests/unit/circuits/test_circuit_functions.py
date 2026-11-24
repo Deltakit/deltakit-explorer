@@ -1,5 +1,6 @@
 # (c) Copyright Riverlane 2020-2026. All rights reserved.
 
+import deltakit_stim as stim
 import pytest
 from deltakit_circuit import (
     Circuit,
@@ -791,7 +792,7 @@ class TestRemoveDeadUnitaries:
         )
         simplified = remove_dead_unitaries(compiled)
 
-        def closed(circuit):
+        def closed(circuit: Circuit) -> stim.Circuit:
             stim_circuit = circuit.as_stim_circuit().flattened()
             stim_circuit.append("R", range(stim_circuit.num_qubits))
             return stim_circuit
